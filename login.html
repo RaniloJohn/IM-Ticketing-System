@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login — Ticketing System</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --primary: #0052cc;
+      --secondary: #0747a6;
+      --light-bg: #f4f5f7;
+      --border: #dfe1e6;
+      --text: #172b4d;
+      --text-light: #5e6c84;
+      --done: #36b37e;
+      --backlog: #ff5630;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #0052cc 0%, #0747a6 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .login-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: white;
+      margin-bottom: 30px;
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    .login-brand i {
+      font-size: 36px;
+    }
+
+    .login-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+      width: 100%;
+      max-width: 440px;
+      overflow: hidden;
+    }
+
+    .tab-bar {
+      display: flex;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 18px;
+      border: none;
+      background: var(--light-bg);
+      color: var(--text-light);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn.active {
+      background: white;
+      color: var(--primary);
+      border-bottom: 2px solid var(--primary);
+      margin-bottom: -2px;
+    }
+
+    .tab-panel {
+      display: none;
+      padding: 30px;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .form-control.error {
+      border-color: var(--backlog);
+    }
+
+    .input-icon-wrap {
+      position: relative;
+    }
+
+    .input-icon-wrap i {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-light);
+      cursor: pointer;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 14px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-submit:hover {
+      background: var(--secondary);
+    }
+
+    .btn-submit:disabled {
+      background: #a0aec0;
+      cursor: not-allowed;
+    }
+
+    .error-box {
+      background: #fff0ee;
+      border: 1px solid #ffbdad;
+      color: var(--backlog);
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .success-box {
+      background: #e3fcef;
+      border: 1px solid #abf5d1;
+      color: #006644;
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 14px;
+      display: none;
+    }
+
+    .hint {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-top: 6px;
+    }
+
+    .divider {
+      text-align: center;
+      color: var(--text-light);
+      font-size: 13px;
+      margin: 20px 0;
+      position: relative;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 42%;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .divider::before {
+      left: 0;
+    }
+
+    .divider::after {
+      right: 0;
+    }
+
+    .seed-accounts {
+      background: var(--light-bg);
+      border-radius: 8px;
+      padding: 14px;
+    }
+
+    .seed-accounts p {
+      font-size: 12px;
+      color: var(--text-light);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .seed-account-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: white;
+      cursor: pointer;
+      margin-bottom: 6px;
+      width: 100%;
+      text-align: left;
+      transition: border-color 0.2s;
+      font-size: 13px;
+    }
+
+    .seed-account-btn:hover {
+      border-color: var(--primary);
+    }
+
+    .seed-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+      flex-shrink: 0;
+    }
+
+    .seed-info strong {
+      display: block;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .seed-info span {
+      font-size: 11px;
+      color: var(--text-light);
+    }
+  </style>
+</head>
+
+<body>
+  <div class="login-brand">
+    <i class="fas fa-tasks"></i>
+    <span>ALD Ticketing System</span>
+  </div>
+
+  <div class="login-card">
+    <div class="tab-bar">
+      <button class="tab-btn active" id="loginTab" onclick="switchTab('login')">
+        <i class="fas fa-sign-in-alt"></i> Log In
+      </button>
+      <button class="tab-btn" id="registerTab" onclick="switchTab('register')">
+        <i class="fas fa-user-plus"></i> Register
+      </button>
+    </div>
+
+    <!-- LOGIN PANEL -->
+    <div class="tab-panel active" id="loginPanel">
+      <div class="error-box" id="loginError"></div>
+      <form id="loginForm" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label for="loginEmail">Email Address</label>
+          <input type="email" id="loginEmail" class="form-control" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <div class="input-icon-wrap">
+            <input type="password" id="loginPassword" class="form-control" placeholder="Enter your password" required>
+            <i class="fas fa-eye" onclick="togglePassword('loginPassword', this)"></i>
+          </div>
+        </div>
+        <button type="submit" class="btn-submit" id="loginBtn">
+          <i class="fas fa-sign-in-alt"></i> Log In
+        </button>
+      </form>
+
+      <div class="divider">or use a demo account</div>
+      <div class="seed-accounts">
+        <p><i class="fas fa-users"></i> Demo accounts (click to auto-fill)</p>
+        <button class="seed-account-btn" onclick="fillLogin('admin@local.com','admin1234')">
+          <div class="seed-avatar" style="background:#dc3545">AD</div>
+          <div class="seed-info"><strong>Admin</strong><span>admin@local.com · admin1234</span></div>
+        </button>
+        <button class="seed-account-btn" onclick="fillLogin('jd@local.com','password1')">
+          <div class="seed-avatar">JD</div>
+          <div class="seed-info"><strong>John Doe</strong><span>jd@local.com · password1</span></div>
+        </button>
+        <button class="seed-account-btn" onclick="fillLogin('aj@local.com','password2')">
+          <div class="seed-avatar" style="background:#36b37e">AJ</div>
+          <div class="seed-info"><strong>Alice Johnson</strong><span>aj@local.com · password2</span></div>
+        </button>
+        <button class="seed-account-btn" onclick="fillLogin('rs@local.com','password3')">
+          <div class="seed-avatar" style="background:#ff8b00">RS</div>
+          <div class="seed-info"><strong>Robert Smith</strong><span>rs@local.com · password3</span></div>
+        </button>
+        <button class="seed-account-btn" onclick="fillLogin('mb@local.com','password4')">
+          <div class="seed-avatar" style="background:#6554c0">MB</div>
+          <div class="seed-info"><strong>Maria Brown</strong><span>mb@local.com · password4</span></div>
+        </button>
+      </div>
+    </div>
+
+    <!-- REGISTER PANEL -->
+    <div class="tab-panel" id="registerPanel">
+      <div class="error-box" id="registerError"></div>
+      <div class="success-box" id="registerSuccess"></div>
+      <form id="registerForm" onsubmit="handleRegister(event)">
+        <div class="form-group">
+          <label for="regName">Full Name</label>
+          <input type="text" id="regName" class="form-control" placeholder="e.g. Jane Smith" required>
+        </div>
+        <div class="form-group">
+          <label for="regEmail">Email Address</label>
+          <input type="email" id="regEmail" class="form-control" placeholder="you@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="regPassword">Password</label>
+          <div class="input-icon-wrap">
+            <input type="password" id="regPassword" class="form-control" placeholder="Min. 8 characters" required
+              minlength="8">
+            <i class="fas fa-eye" onclick="togglePassword('regPassword', this)"></i>
+          </div>
+          <p class="hint"><i class="fas fa-info-circle"></i> Must be at least 8 characters.</p>
+        </div>
+        <button type="submit" class="btn-submit" id="registerBtn">
+          <i class="fas fa-user-plus"></i> Create Account
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script src="login.js"></script>
+</body>
+
+</html>

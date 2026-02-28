@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ALD Ticketing System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <i class="fas fa-tasks"></i>
+            <span>ALD Ticketing System</span>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="#" class="active" id="projectsLink">Projects</a></li>
+                <li><a href="#" id="boardLink">Board</a></li>
+                <li><a href="#" id="reportsLink">Reports</a></li>
+                <li><a href="#" id="issuesLink">Issues</a></li>
+            </ul>
+        </nav>
+        <div class="user-info">
+            <span>John Doe</span>
+            <div class="user-avatar">JD</div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Projects</div>
+                <ul class="sidebar-menu" id="projectsList">
+                    <li id="noProjectsMessage"><a href="#" style="color: var(--text-light);"><i
+                                class="fas fa-info-circle"></i> No projects yet</a></li>
+                </ul>
+                <button class="btn btn-primary btn-small" id="createProjectBtn" style="width: 100%; margin-top: 10px;">
+                    <i class="fas fa-plus"></i> Create Project
+                </button>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Filters</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#" id="myIssuesFilter"><i class="fas fa-filter"></i> My Open Issues</a></li>
+                    <li><a href="#" id="recentFilter"><i class="fas fa-filter"></i> Recently Updated</a></li>
+                    <li><a href="#" id="createdByMeFilter"><i class="fas fa-filter"></i> Created by Me</a></li>
+                    <li><a href="#" id="searchFilter"><i class="fas fa-search"></i> Advanced Search</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Views</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#" id="listViewLink"><i class="fas fa-table"></i> List View</a></li>
+                    <li><a href="#" class="active" id="boardViewLink"><i class="fas fa-columns"></i> Board View</a></li>
+                    <li><a href="#" id="reportsViewLink"><i class="fas fa-chart-bar"></i> Reports</a></li>
+                    <li><a href="#" id="timelineViewLink"><i class="fas fa-calendar-alt"></i> Timeline</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+
+            <!-- ① Projects Page -->
+            <div id="projectsPage" class="page">
+                <div class="page-header">
+                    <h1>Projects</h1>
+                    <p>Create and manage your projects</p>
+                </div>
+                <div class="projects-grid" id="projectsGrid">
+                    <div class="no-projects-message" id="emptyProjectsMessage">
+                        <i class="fas fa-folder-open"></i>
+                        <h3>No Projects Yet</h3>
+                        <p>Create your first project to start managing tickets</p>
+                        <button class="btn btn-primary" id="createFirstProjectBtn">
+                            <i class="fas fa-plus"></i> Create First Project
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ② Board Page -->
+            <div id="boardPage" class="page" style="display: none;">
+                <div class="board-header">
+                    <div class="board-title">
+                        <h1 id="currentProjectName">Select a Project</h1>
+                        <p id="currentProjectDescription"></p>
+                    </div>
+                    <div class="board-actions">
+                        <!-- View toggle -->
+                        <div class="view-toggle-group" id="viewToggleGroup">
+                            <button class="view-toggle-btn active" id="toggleBoardBtn" title="Board View">
+                                <i class="fas fa-columns"></i> Board
+                            </button>
+                            <button class="view-toggle-btn" id="toggleListBtn" title="List View">
+                                <i class="fas fa-list"></i> List
+                            </button>
+                        </div>
+                        <button class="btn btn-outline" id="filterBtn">
+                            <i class="fas fa-filter"></i> Filter
+                        </button>
+                        <button class="btn btn-primary" id="createTicketBtn">
+                            <i class="fas fa-plus"></i> Create Issue
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Active filter bar -->
+                <div id="filterBar" class="filter-bar" style="display:none;">
+                    <span id="filterLabel"><i class="fas fa-filter"></i> Filtered view</span>
+                    <button class="btn btn-small btn-outline" id="clearFilterBtn">
+                        <i class="fas fa-times"></i> Clear Filter
+                    </button>
+                </div>
+
+                <!-- Kanban Board -->
+                <div class="board-container" id="boardContainer">
+                    <div class="board-column backlog" data-status="backlog">
+                        <div class="column-header">
+                            <div class="column-title"><i class="fas fa-inbox"></i> Backlog<span
+                                    class="ticket-count">0</span></div>
+                            <i class="fas fa-ellipsis-h"></i>
+                        </div>
+                        <div class="column-content" id="backlogColumn"></div>
+                    </div>
+                    <div class="board-column todo" data-status="todo">
+                        <div class="column-header">
+                            <div class="column-title"><i class="fas fa-clipboard-list"></i> To Do<span
+                                    class="ticket-count">0</span></div>
+                            <i class="fas fa-ellipsis-h"></i>
+                        </div>
+                        <div class="column-content" id="todoColumn"></div>
+                    </div>
+                    <div class="board-column inprogress" data-status="inprogress">
+                        <div class="column-header">
+                            <div class="column-title"><i class="fas fa-spinner"></i> In Progress<span
+                                    class="ticket-count">0</span></div>
+                            <i class="fas fa-ellipsis-h"></i>
+                        </div>
+                        <div class="column-content" id="inprogressColumn"></div>
+                    </div>
+                    <div class="board-column done" data-status="done">
+                        <div class="column-header">
+                            <div class="column-title"><i class="fas fa-check-circle"></i> Done<span
+                                    class="ticket-count">0</span></div>
+                            <i class="fas fa-ellipsis-h"></i>
+                        </div>
+                        <div class="column-content" id="doneColumn"></div>
+                    </div>
+                </div>
+
+                <!-- List View -->
+                <div id="listViewContainer" style="display:none;">
+                    <div class="list-toolbar">
+                        <input type="text" id="listSearch" class="form-control" placeholder="Search tickets..."
+                            style="max-width:320px;">
+                        <select id="listStatusFilter" class="form-control" style="max-width:150px;">
+                            <option value="">All Statuses</option>
+                            <option value="backlog">Backlog</option>
+                            <option value="todo">To Do</option>
+                            <option value="inprogress">In Progress</option>
+                            <option value="done">Done</option>
+                        </select>
+                        <select id="listPriorityFilter" class="form-control" style="max-width:150px;">
+                            <option value="">All Priorities</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                    <div class="list-view-table-wrap">
+                        <table class="list-view-table" id="listViewTable">
+                            <thead>
+                                <tr>
+                                    <th data-sort="id">ID <i class="fas fa-sort"></i></th>
+                                    <th data-sort="title">Title <i class="fas fa-sort"></i></th>
+                                    <th data-sort="status">Status <i class="fas fa-sort"></i></th>
+                                    <th data-sort="priority">Priority <i class="fas fa-sort"></i></th>
+                                    <th data-sort="type">Type <i class="fas fa-sort"></i></th>
+                                    <th data-sort="assignee_name">Assignee <i class="fas fa-sort"></i></th>
+                                    <th data-sort="story_points">SP <i class="fas fa-sort"></i></th>
+                                    <th data-sort="due_date">Due Date <i class="fas fa-sort"></i></th>
+                                    <th>Escalated</th>
+                                </tr>
+                            </thead>
+                            <tbody id="listViewBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ③ Reports Page -->
+            <div id="reportsPage" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1><i class="fas fa-chart-bar"></i> Reports</h1>
+                    <p id="reportsProjectName">Ticket statistics and team insights</p>
+                </div>
+                <div class="reports-grid">
+                    <div class="report-card">
+                        <h3>Tickets by Status</h3>
+                        <div style="height:260px;position:relative;">
+                            <canvas id="rptStatusChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Tickets by Priority</h3>
+                        <div style="height:260px;position:relative;">
+                            <canvas id="rptPriorityChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Tickets by Type</h3>
+                        <div style="height:260px;position:relative;">
+                            <canvas id="rptTypeChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="report-card">
+                        <h3>Workload by Assignee</h3>
+                        <div style="height:260px;position:relative;">
+                            <canvas id="rptAssigneeChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="report-card" style="margin-top:24px;">
+                    <h3><i class="fas fa-exclamation-triangle" style="color:#ff5630"></i> Escalated &amp; Overdue
+                        Tickets</h3>
+                    <div id="rptEscalatedList" class="rpt-list"></div>
+                </div>
+            </div>
+
+            <!-- ④ Timeline Page -->
+            <div id="timelinePage" class="page" style="display: none;">
+                <div class="page-header">
+                    <h1><i class="fas fa-calendar-alt"></i> Timeline</h1>
+                    <p id="timelineProjectName">Ticket schedule and due dates</p>
+                </div>
+                <div class="timeline-toolbar">
+                    <select id="timelineStatusFilter" class="form-control" style="max-width:160px;">
+                        <option value="">All Statuses</option>
+                        <option value="backlog">Backlog</option>
+                        <option value="todo">To Do</option>
+                        <option value="inprogress">In Progress</option>
+                        <option value="done">Done</option>
+                    </select>
+                    <select id="timelineAssigneeFilter" class="form-control" style="max-width:180px;">
+                        <option value="">All Assignees</option>
+                    </select>
+                </div>
+                <div id="timelineContainer" class="timeline-container"></div>
+                <div id="timelineEmpty" style="display:none;text-align:center;padding:60px;color:#5e6c84;">
+                    <i class="fas fa-calendar-times"
+                        style="font-size:48px;margin-bottom:16px;opacity:.4;display:block;"></i>
+                    <p>No tickets with due dates found. Set due dates on tickets to see them here.</p>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ── Modals ─────────────────────────────────────────── -->
+
+    <!-- Create Ticket Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create Issue</h2>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="ticketForm">
+                    <div class="form-group">
+                        <label for="ticketTitle">Issue Summary *</label>
+                        <input type="text" id="ticketTitle" class="form-control" placeholder="Enter a short description"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticketDescription">Description</label>
+                        <textarea id="ticketDescription" class="form-control"
+                            placeholder="Provide more details"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ticketStatus">Status</label>
+                            <select id="ticketStatus" class="form-control">
+                                <option value="backlog">Backlog</option>
+                                <option value="todo" selected>To Do</option>
+                                <option value="inprogress">In Progress</option>
+                                <option value="done">Done</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ticketPriority">Priority</label>
+                            <select id="ticketPriority" class="form-control">
+                                <option value="low">Low</option>
+                                <option value="medium" selected>Medium</option>
+                                <option value="high">High</option>
+                                <option value="critical">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ticketType">Issue Type</label>
+                            <select id="ticketType" class="form-control">
+                                <option value="task">Task</option>
+                                <option value="bug">Bug</option>
+                                <option value="story">Story</option>
+                                <option value="epic">Epic</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ticketStoryPoints">Story Points</label>
+                            <select id="ticketStoryPoints" class="form-control">
+                                <option value="">—</option>
+                                <option value="1">1</option>
+                                <option value="2">2</option>
+                                <option value="3">3</option>
+                                <option value="5">5</option>
+                                <option value="8">8</option>
+                                <option value="13">13</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ticketAssignee">Assignee</label>
+                            <select id="ticketAssignee" class="form-control">
+                                <option value="">Unassigned</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="ticketDueDate">Due Date</label>
+                            <input type="date" id="ticketDueDate" class="form-control">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticketLabels">Labels (comma-separated)</label>
+                        <input type="text" id="ticketLabels" class="form-control"
+                            placeholder="e.g. frontend, bug, urgent">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveTicketBtn">Create Issue</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Project Modal -->
+    <div class="modal-overlay" id="projectModalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create New Project</h2>
+                <button class="close-modal" id="closeProjectModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="projectForm">
+                    <div class="form-group">
+                        <label for="projectName">Project Name *</label>
+                        <input type="text" id="projectName" class="form-control" placeholder="Enter project name"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label for="projectDescription">Description</label>
+                        <textarea id="projectDescription" class="form-control"
+                            placeholder="Describe the project"></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="projectKey">Project Key *</label>
+                            <input type="text" id="projectKey" class="form-control" placeholder="e.g. WEB" maxlength="5"
+                                required>
+                            <small class="form-text">Used in ticket IDs (e.g., WEB-101)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="projectLead">Project Lead</label>
+                            <select id="projectLead" class="form-control">
+                                <option value="">Select lead</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelProjectBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveProjectBtn">Create Project</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Search Modal -->
+    <div class="modal-overlay" id="searchModalOverlay">
+        <div class="modal" style="max-width:680px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-search"></i> Advanced Search</h2>
+                <button class="close-modal" id="closeSearchModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="searchKeyword">Keyword</label>
+                    <input type="text" id="searchKeyword" class="form-control"
+                        placeholder="Search in title and description...">
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="searchStatus">Status</label>
+                        <select id="searchStatus" class="form-control">
+                            <option value="">Any</option>
+                            <option value="backlog">Backlog</option>
+                            <option value="todo">To Do</option>
+                            <option value="inprogress">In Progress</option>
+                            <option value="done">Done</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="searchPriority">Priority</label>
+                        <select id="searchPriority" class="form-control">
+                            <option value="">Any</option>
+                            <option value="critical">Critical</option>
+                            <option value="high">High</option>
+                            <option value="medium">Medium</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="searchType">Type</label>
+                        <select id="searchType" class="form-control">
+                            <option value="">Any</option>
+                            <option value="task">Task</option>
+                            <option value="bug">Bug</option>
+                            <option value="story">Story</option>
+                            <option value="epic">Epic</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="searchAssignee">Assignee</label>
+                        <select id="searchAssignee" class="form-control">
+                            <option value="">Any</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="searchLabels">Label contains</label>
+                        <input type="text" id="searchLabels" class="form-control" placeholder="e.g. frontend">
+                    </div>
+                    <div class="form-group">
+                        <label for="searchEscalated">Escalated only</label>
+                        <select id="searchEscalated" class="form-control">
+                            <option value="">No filter</option>
+                            <option value="1">Escalated tickets only</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="searchResults" class="search-results" style="display:none;">
+                    <div class="search-results-header">
+                        <span id="searchResultCount"></span>
+                    </div>
+                    <div id="searchResultsList"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelSearchBtn">Close</button>
+                <button class="btn btn-primary" id="runSearchBtn"><i class="fas fa-search"></i> Search</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>

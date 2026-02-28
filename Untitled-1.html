@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jira-like Ticketing System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        :root {
+            --primary: #0052cc;
+            --secondary: #0747a6;
+            --light-bg: #f4f5f7;
+            --border: #dfe1e6;
+            --text: #172b4d;
+            --text-light: #5e6c84;
+            --todo: #ff8b00;
+            --inprogress: #0052cc;
+            --done: #36b37e;
+            --backlog: #ff5630;
+        }
+
+        body {
+            background-color: #fafbfc;
+            color: var(--text);
+        }
+
+        /* Header */
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 24px;
+            font-weight: 700;
+        }
+
+        .logo i {
+            font-size: 28px;
+        }
+
+        nav ul {
+            display: flex;
+            list-style: none;
+            gap: 25px;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: opacity 0.3s;
+        }
+
+        nav a:hover {
+            opacity: 0.8;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: white;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        /* Main Content */
+        .container {
+            display: flex;
+            min-height: calc(100vh - 70px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 250px;
+            background-color: white;
+            border-right: 1px solid var(--border);
+            padding: 20px 0;
+        }
+
+        .sidebar-section {
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-light);
+            margin-bottom: 10px;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar-menu {
+            list-style: none;
+        }
+
+        .sidebar-menu li {
+            margin-bottom: 8px;
+        }
+
+        .sidebar-menu a {
+            color: var(--text);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 10px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+
+        .sidebar-menu a:hover,
+        .sidebar-menu a.active {
+            background-color: var(--light-bg);
+            color: var(--primary);
+        }
+
+        .sidebar-menu i {
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Board */
+        .main-content {
+            flex: 1;
+            padding: 25px;
+            overflow-x: auto;
+        }
+
+        .board-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .board-title h1 {
+            font-size: 24px;
+        }
+
+        .board-actions {
+            display: flex;
+            gap: 15px;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border-radius: 3px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--secondary);
+        }
+
+        .btn-outline {
+            background-color: white;
+            color: var(--primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-outline:hover {
+            background-color: var(--light-bg);
+        }
+
+        /* Kanban Board */
+        .board-container {
+            display: flex;
+            gap: 20px;
+            min-height: 600px;
+        }
+
+        .board-column {
+            flex: 1;
+            min-width: 280px;
+            background-color: var(--light-bg);
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            max-height: 80vh;
+        }
+
+        .column-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .column-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .ticket-count {
+            background-color: white;
+            color: var(--text-light);
+            font-size: 12px;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .todo .column-title { color: var(--todo); }
+        .inprogress .column-title { color: var(--inprogress); }
+        .done .column-title { color: var(--done); }
+        .backlog .column-title { color: var(--backlog); }
+
+        .column-content {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        .ticket {
+            background-color: white;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 15px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border-left: 4px solid var(--border);
+            cursor: grab;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .ticket:hover {
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+
+        .ticket.todo { border-left-color: var(--todo); }
+        .ticket.inprogress { border-left-color: var(--inprogress); }
+        .ticket.done { border-left-color: var(--done); }
+        .ticket.backlog { border-left-color: var(--backlog); }
+
+        .ticket-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+
+        .ticket-id {
+            font-size: 12px;
+            color: var(--text-light);
+            font-weight: 600;
+        }
+
+        .ticket-priority {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .priority-high { background-color: #ffebee; color: #d32f2f; }
+        .priority-medium { background-color: #fff3e0; color: #f57c00; }
+        .priority-low { background-color: #e8f5e9; color: #388e3c; }
+
+        .ticket-title {
+            font-weight: 600;
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+
+        .ticket-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+        }
+
+        .ticket-type {
+            font-size: 11px;
+            padding: 3px 8px;
+            background-color: var(--light-bg);
+            border-radius: 3px;
+            color: var(--text-light);
+        }
+
+        .ticket-assignee {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        /* Create Ticket Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .modal {
+            background-color: white;
+            width: 500px;
+            max-width: 90%;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            font-size: 20px;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--text-light);
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        textarea.form-control {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .modal-footer {
+            padding: 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Drag and drop states */
+        .drag-over {
+            background-color: rgba(0, 82, 204, 0.05);
+            border: 2px dashed var(--primary);
+        }
+
+        .dragging {
+            opacity: 0.5;
+            transform: rotate(3deg);
+        }
+
+        /* Responsive */
+        @media (max-width: 1200px) {
+            .board-container {
+                flex-wrap: wrap;
+            }
+            
+            .board-column {
+                min-width: calc(50% - 10px);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+            }
+            
+            .sidebar {
+                width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+            
+            .board-column {
+                min-width: 100%;
+            }
+            
+            nav ul {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <i class="fas fa-tasks"></i>
+            <span>JiraClone</span>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="#" class="active">Projects</a></li>
+                <li><a href="#">Dashboards</a></li>
+                <li><a href="#">Reports</a></li>
+                <li><a href="#">Issues</a></li>
+            </ul>
+        </nav>
+        <div class="user-info">
+            <span>John Doe</span>
+            <div class="user-avatar">JD</div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Projects</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#" class="active"><i class="fas fa-project-diagram"></i> Website Redesign</a></li>
+                    <li><a href="#"><i class="fas fa-project-diagram"></i> Mobile App</a></li>
+                    <li><a href="#"><i class="fas fa-project-diagram"></i> API Development</a></li>
+                    <li><a href="#"><i class="fas fa-plus"></i> Create Project</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Filters</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#"><i class="fas fa-filter"></i> My Open Issues</a></li>
+                    <li><a href="#"><i class="fas fa-filter"></i> Recently Updated</a></li>
+                    <li><a href="#"><i class="fas fa-filter"></i> Created by Me</a></li>
+                    <li><a href="#"><i class="fas fa-search"></i> Advanced Search</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Views</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#"><i class="fas fa-table"></i> List View</a></li>
+                    <li><a href="#"><i class="fas fa-columns"></i> Board View</a></li>
+                    <li><a href="#"><i class="fas fa-chart-bar"></i> Reports</a></li>
+                    <li><a href="#"><i class="fas fa-calendar-alt"></i> Timeline</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="board-header">
+                <div class="board-title">
+                    <h1>Website Redesign Project</h1>
+                    <p>Manage all tasks for the website redesign project</p>
+                </div>
+                <div class="board-actions">
+                    <button class="btn btn-outline">
+                        <i class="fas fa-filter"></i> Filter
+                    </button>
+                    <button class="btn btn-primary" id="createTicketBtn">
+                        <i class="fas fa-plus"></i> Create Issue
+                    </button>
+                </div>
+            </div>
+
+            <!-- Kanban Board -->
+            <div class="board-container" id="boardContainer">
+                <!-- Backlog Column -->
+                <div class="board-column backlog" data-status="backlog">
+                    <div class="column-header">
+                        <div class="column-title">
+                            <i class="fas fa-inbox"></i> Backlog
+                            <span class="ticket-count">3</span>
+                        </div>
+                        <i class="fas fa-ellipsis-h"></i>
+                    </div>
+                    <div class="column-content" id="backlogColumn">
+                        <!-- Tickets will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- To Do Column -->
+                <div class="board-column todo" data-status="todo">
+                    <div class="column-header">
+                        <div class="column-title">
+                            <i class="fas fa-clipboard-list"></i> To Do
+                            <span class="ticket-count">4</span>
+                        </div>
+                        <i class="fas fa-ellipsis-h"></i>
+                    </div>
+                    <div class="column-content" id="todoColumn">
+                        <!-- Tickets will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- In Progress Column -->
+                <div class="board-column inprogress" data-status="inprogress">
+                    <div class="column-header">
+                        <div class="column-title">
+                            <i class="fas fa-spinner"></i> In Progress
+                            <span class="ticket-count">2</span>
+                        </div>
+                        <i class="fas fa-ellipsis-h"></i>
+                    </div>
+                    <div class="column-content" id="inprogressColumn">
+                        <!-- Tickets will be added here dynamically -->
+                    </div>
+                </div>
+
+                <!-- Done Column -->
+                <div class="board-column done" data-status="done">
+                    <div class="column-header">
+                        <div class="column-title">
+                            <i class="fas fa-check-circle"></i> Done
+                            <span class="ticket-count">3</span>
+                        </div>
+                        <i class="fas fa-ellipsis-h"></i>
+                    </div>
+                    <div class="column-content" id="doneColumn">
+                        <!-- Tickets will be added here dynamically -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Create Ticket Modal -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Create Issue</h2>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="ticketForm">
+                    <div class="form-group">
+                        <label for="ticketTitle">Issue Summary *</label>
+                        <input type="text" id="ticketTitle" class="form-control" placeholder="Enter a short description of the issue" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticketDescription">Description</label>
+                        <textarea id="ticketDescription" class="form-control" placeholder="Provide more details about the issue"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticketStatus">Status</label>
+                        <select id="ticketStatus" class="form-control">
+                            <option value="backlog">Backlog</option>
+                            <option value="todo">To Do</option>
+                            <option value="inprogress">In Progress</option>
+                            <option value="done">Done</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticketPriority">Priority</label>
+                        <select id="ticketPriority" class="form-control">
+                            <option value="low">Low</option>
+                            <option value="medium" selected>Medium</option>
+                            <option value="high">High</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticketType">Issue Type</label>
+                        <select id="ticketType" class="form-control">
+                            <option value="task">Task</option>
+                            <option value="bug">Bug</option>
+                            <option value="story">Story</option>
+                            <option value="epic">Epic</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="ticketAssignee">Assignee</label>
+                        <select id="ticketAssignee" class="form-control">
+                            <option value="JD">John Doe</option>
+                            <option value="AJ">Alice Johnson</option>
+                            <option value="RS">Robert Smith</option>
+                            <option value="MB">Maria Brown</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveTicketBtn">Create Issue</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Sample data for initial tickets
+        const initialTickets = [
+            {
+                id: "WEB-101",
+                title: "Design homepage mockup",
+                description: "Create initial design mockup for the new homepage",
+                status: "backlog",
+                priority: "high",
+                type: "story",
+                assignee: "JD"
+            },
+            {
+                id: "WEB-102",
+                title: "Fix responsive layout issues",
+                description: "Mobile view breaks on product listing page",
+                status: "todo",
+                priority: "high",
+                type: "bug",
+                assignee: "AJ"
+            },
+            {
+                id: "WEB-103",
+                title: "Implement user authentication",
+                description: "Create login and registration functionality",
+                status: "inprogress",
+                priority: "medium",
+                type: "story",
+                assignee: "RS"
+            },
+            {
+                id: "WEB-104",
+                title: "Update color scheme",
+                description: "Apply new brand colors to all components",
+                status: "todo",
+                priority: "medium",
+                type: "task",
+                assignee: "MB"
+            },
+            {
+                id: "WEB-105",
+                title: "Add product search feature",
+                description: "Implement search functionality with filters",
+                status: "inprogress",
+                priority: "high",
+                type: "story",
+                assignee: "JD"
+            },
+            {
+                id: "WEB-106",
+                title: "Optimize image loading",
+                description: "Implement lazy loading for product images",
+                status: "done",
+                priority: "low",
+                type: "task",
+                assignee: "AJ"
+            },
+            {
+                id: "WEB-107",
+                title: "Fix checkout process bug",
+                description: "Payment fails for orders over $1000",
+                status: "done",
+                priority: "high",
+                type: "bug",
+                assignee: "RS"
+            },
+            {
+                id: "WEB-108",
+                title: "Create admin dashboard",
+                description: "Design and implement admin interface",
+                status: "backlog",
+                priority: "medium",
+                type: "epic",
+                assignee: "MB"
+            },
+            {
+                id: "WEB-109",
+                title: "Write API documentation",
+                description: "Document all endpoints for the new API",
+                status: "todo",
+                priority: "low",
+                type: "task",
+                assignee: "JD"
+            },
+            {
+                id: "WEB-110",
+                title: "Setup CI/CD pipeline",
+                description: "Configure automated testing and deployment",
+                status: "done",
+                priority: "medium",
+                type: "task",
+                assignee: "AJ"
+            },
+            {
+                id: "WEB-111",
+                title: "Implement dark mode",
+                description: "Add theme toggle and dark mode styles",
+                status: "todo",
+                priority: "medium",
+                type: "story",
+                assignee: "RS"
+            },
+            {
+                id: "WEB-112",
+                title: "Database optimization",
+                description: "Optimize queries and add missing indexes",
+                status: "backlog",
+                priority: "high",
+                type: "task",
+                assignee: "MB"
+            }
+        ];
+
+        // DOM Elements
+        const boardContainer = document.getElementById('boardContainer');
+        const createTicketBtn = document.getElementById('createTicketBtn');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const closeModal = document.getElementById('closeModal');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const saveTicketBtn = document.getElementById('saveTicketBtn');
+        const ticketForm = document.getElementById('ticketForm');
+        
+        // Ticket counter
+        let ticketCounter = 113; // Starting from WEB-113 for new tickets
+
+        // Initialize the board with sample tickets
+        function initializeBoard() {
+            initialTickets.forEach(ticket => {
+                addTicketToDOM(ticket);
+            });
+            updateTicketCounts();
+        }
+
+        // Create a ticket element
+        function createTicketElement(ticket) {
+            const ticketElement = document.createElement('div');
+            ticketElement.className = `ticket ${ticket.status}`;
+            ticketElement.setAttribute('data-id', ticket.id);
+            ticketElement.setAttribute('draggable', 'true');
+            
+            // Priority class
+            const priorityClass = `priority-${ticket.priority}`;
+            
+            // Assignee initials
+            const assigneeName = getAssigneeName(ticket.assignee);
+            
+            ticketElement.innerHTML = `
+                <div class="ticket-header">
+                    <div class="ticket-id">${ticket.id}</div>
+                    <div class="ticket-priority ${priorityClass}">${ticket.priority}</div>
+                </div>
+                <div class="ticket-title">${ticket.title}</div>
+                <div class="ticket-footer">
+                    <div class="ticket-type">${ticket.type}</div>
+                    <div class="ticket-assignee" title="${assigneeName}">${ticket.assignee}</div>
+                </div>
+            `;
+            
+            // Add drag event listeners
+            ticketElement.addEventListener('dragstart', handleDragStart);
+            
+            return ticketElement;
+        }
+
+        // Add a ticket to the DOM
+        function addTicketToDOM(ticket) {
+            const ticketElement = createTicketElement(ticket);
+            const columnId = `${ticket.status}Column`;
+            const column = document.getElementById(columnId);
+            
+            if (column) {
+                column.appendChild(ticketElement);
+            }
+        }
+
+        // Update ticket counts in column headers
+        function updateTicketCounts() {
+            const statuses = ['backlog', 'todo', 'inprogress', 'done'];
+            
+            statuses.forEach(status => {
+                const columnId = `${status}Column`;
+                const column = document.getElementById(columnId);
+                const count = column.children.length;
+                
+                // Update the count in the column header
+                const columnElement = column.parentElement;
+                const countElement = columnElement.querySelector('.ticket-count');
+                if (countElement) {
+                    countElement.textContent = count;
+                }
+            });
+        }
+
+        // Get assignee name from initials
+        function getAssigneeName(initials) {
+            const assignees = {
+                'JD': 'John Doe',
+                'AJ': 'Alice Johnson',
+                'RS': 'Robert Smith',
+                'MB': 'Maria Brown'
+            };
+            
+            return assignees[initials] || initials;
+        }
+
+        // Generate a new ticket ID
+        function generateTicketId() {
+            return `WEB-${ticketCounter++}`;
+        }
+
+        // Handle drag start
+        function handleDragStart(e) {
+            e.dataTransfer.setData('text/plain', e.target.getAttribute('data-id'));
+            e.target.classList.add('dragging');
+        }
+
+        // Handle drag over
+        function handleDragOver(e) {
+            e.preventDefault();
+            
+            // Add visual feedback for valid drop targets
+            if (e.target.classList.contains('column-content')) {
+                e.target.classList.add('drag-over');
+            }
+        }
+
+        // Handle drag leave
+        function handleDragLeave(e) {
+            if (e.target.classList.contains('column-content')) {
+                e.target.classList.remove('drag-over');
+            }
+        }
+
+        // Handle drop
+        function handleDrop(e) {
+            e.preventDefault();
+            
+            // Remove visual feedback
+            if (e.target.classList.contains('column-content')) {
+                e.target.classList.remove('drag-over');
+            }
+            
+            // Get the ticket ID from the drag data
+            const ticketId = e.dataTransfer.getData('text/plain');
+            const draggedElement = document.querySelector(`[data-id="${ticketId}"]`);
+            
+            // Get the status from the column
+            const column = e.target.closest('.board-column');
+            const newStatus = column.getAttribute('data-status');
+            
+            // Update the ticket's status class
+            draggedElement.className = draggedElement.className.replace(/\b(backlog|todo|inprogress|done)\b/g, newStatus);
+            
+            // Append the ticket to the new column
+            e.target.appendChild(draggedElement);
+            
+            // Remove dragging class
+            draggedElement.classList.remove('dragging');
+            
+            // Update ticket counts
+            updateTicketCounts();
+        }
+
+        // Handle form submission
+        function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            // Get form values
+            const title = document.getElementById('ticketTitle').value;
+            const description = document.getElementById('ticketDescription').value;
+            const status = document.getElementById('ticketStatus').value;
+            const priority = document.getElementById('ticketPriority').value;
+            const type = document.getElementById('ticketType').value;
+            const assignee = document.getElementById('ticketAssignee').value;
+            
+            // Create new ticket object
+            const newTicket = {
+                id: generateTicketId(),
+                title: title,
+                description: description,
+                status: status,
+                priority: priority,
+                type: type,
+                assignee: assignee
+            };
+            
+            // Add ticket to DOM
+            addTicketToDOM(newTicket);
+            
+            // Update ticket counts
+            updateTicketCounts();
+            
+            // Close modal and reset form
+            closeModalFunc();
+            ticketForm.reset();
+        }
+
+        // Open modal function
+        function openModalFunc() {
+            modalOverlay.style.display = 'flex';
+            document.getElementById('ticketTitle').focus();
+        }
+
+        // Close modal function
+        function closeModalFunc() {
+            modalOverlay.style.display = 'none';
+            ticketForm.reset();
+        }
+
+        // Event Listeners
+        createTicketBtn.addEventListener('click', openModalFunc);
+        closeModal.addEventListener('click', closeModalFunc);
+        cancelBtn.addEventListener('click', closeModalFunc);
+        
+        // Close modal when clicking outside
+        modalOverlay.addEventListener('click', (e) => {
+            if (e.target === modalOverlay) {
+                closeModalFunc();
+            }
+        });
+        
+        // Handle form submission
+        saveTicketBtn.addEventListener('click', handleFormSubmit);
+        
+        // Add drag and drop event listeners to columns
+        document.querySelectorAll('.column-content').forEach(column => {
+            column.addEventListener('dragover', handleDragOver);
+            column.addEventListener('dragleave', handleDragLeave);
+            column.addEventListener('drop', handleDrop);
+        });
+
+        // Initialize the board when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeBoard();
+            
+            // Add some sample tickets to the backlog column
+            const backlogColumn = document.getElementById('backlogColumn');
+            const todoColumn = document.getElementById('todoColumn');
+            const inprogressColumn = document.getElementById('inprogressColumn');
+            const doneColumn = document.getElementById('doneColumn');
+            
+            // Set up columns as drop zones
+            [backlogColumn, todoColumn, inprogressColumn, doneColumn].forEach(column => {
+                column.addEventListener('dragover', handleDragOver);
+                column.addEventListener('dragleave', handleDragLeave);
+                column.addEventListener('drop', handleDrop);
+            });
+        });
+    </script>
+</body>
+</html>

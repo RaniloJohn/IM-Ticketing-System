@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Jira Clone</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* Dashboard Specific Styles */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: auto auto;
+            gap: 25px;
+            padding: 25px;
+        }
+
+        .dashboard-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--border);
+        }
+
+        .dashboard-card.large {
+            grid-column: span 2;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--light-bg);
+        }
+
+        .card-header h2 {
+            font-size: 20px;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-header h2 i {
+            color: var(--primary);
+        }
+
+        .calendar {
+            width: 100%;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .calendar-nav {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .calendar-nav button {
+            background: var(--light-bg);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text);
+            transition: all 0.2s;
+        }
+
+        .calendar-nav button:hover {
+            background: var(--primary);
+            color: white;
+        }
+
+        .current-month {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+        }
+
+        .calendar-day {
+            text-align: center;
+            padding: 8px;
+            font-weight: 600;
+            color: var(--text-light);
+            font-size: 14px;
+        }
+
+        .calendar-date {
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+            font-weight: 500;
+        }
+
+        .calendar-date:hover {
+            background: var(--light-bg);
+        }
+
+        .calendar-date.today {
+            background: var(--primary);
+            color: white;
+        }
+
+        .calendar-date.event {
+            background: #e3f2fd;
+        }
+
+        .calendar-date .event-dot {
+            position: absolute;
+            bottom: 4px;
+            width: 6px;
+            height: 6px;
+            background: var(--primary);
+            border-radius: 50%;
+        }
+
+        .calendar-date.other-month {
+            color: #ccc;
+        }
+
+        .events-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .event-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: var(--light-bg);
+            border-radius: 8px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .event-item.personal {
+            border-left-color: var(--done);
+        }
+
+        .event-item.meeting {
+            border-left-color: var(--todo);
+        }
+
+        .event-item.deadline {
+            border-left-color: var(--backlog);
+        }
+
+        .event-info h4 {
+            margin-bottom: 5px;
+            color: var(--text);
+        }
+
+        .event-info p {
+            color: var(--text-light);
+            font-size: 14px;
+        }
+
+        .event-time {
+            font-size: 14px;
+            color: var(--text-light);
+        }
+
+        .add-event-btn {
+            margin-top: 20px;
+            width: 100%;
+        }
+
+        /* Charts */
+        .chart-container {
+            height: 300px;
+            position: relative;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .stat-card {
+            background: var(--light-bg);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card h3 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card.backlog h3 {
+            color: var(--backlog);
+        }
+
+        .stat-card.todo h3 {
+            color: var(--todo);
+        }
+
+        .stat-card.inprogress h3 {
+            color: var(--inprogress);
+        }
+
+        .stat-card.done h3 {
+            color: var(--done);
+        }
+
+        .stat-card p {
+            color: var(--text-light);
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        /* Modal for adding events */
+        .event-modal .modal {
+            width: 400px;
+        }
+
+        @media (max-width: 1200px) {
+            .dashboard-container {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-card.large {
+                grid-column: span 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 15px;
+                gap: 15px;
+            }
+
+            .dashboard-card {
+                padding: 20px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Header -->
+    <header>
+        <div class="logo">
+            <i class="fas fa-tasks"></i>
+            <span>ALD Ticketing System</span>
+        </div>
+        <nav>
+            <ul>
+                <li><a href="Ticketing.html">Projects</a></li>
+                <li><a href="dashboard.html" class="active">Dashboard</a></li>
+                <li><a href="#">Reports</a></li>
+                <li><a href="#">Issues</a></li>
+            </ul>
+        </nav>
+        <div class="user-info">
+            <span>John Doe</span>
+            <div class="user-avatar">JD</div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-section">
+                <div class="sidebar-title">Quick Stats</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#"><i class="fas fa-chart-line"></i> Overview</a></li>
+                    <li><a href="#"><i class="fas fa-calendar-check"></i> This Week</a></li>
+                    <li><a href="#"><i class="fas fa-calendar-alt"></i> This Month</a></li>
+                    <li><a href="#"><i class="fas fa-user-check"></i> Assigned to Me</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Views</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#"><i class="fas fa-chart-pie"></i> Ticket Status</a></li>
+                    <li><a href="#"><i class="fas fa-users"></i> Team Performance</a></li>
+                    <li><a href="#"><i class="fas fa-clock"></i> Time Tracking</a></li>
+                    <li><a href="#"><i class="fas fa-calendar-plus"></i> Add Calendar Event</a></li>
+                </ul>
+            </div>
+            <div class="sidebar-section">
+                <div class="sidebar-title">Projects</div>
+                <ul class="sidebar-menu">
+                    <li><a href="#"><i class="fas fa-project-diagram"></i> Website Redesign</a></li>
+                    <li><a href="#"><i class="fas fa-project-diagram"></i> Mobile App</a></li>
+                    <li><a href="#"><i class="fas fa-project-diagram"></i> API Development</a></li>
+                </ul>
+            </div>
+        </aside>
+
+        <!-- Dashboard Content -->
+        <main class="main-content">
+            <div class="board-header">
+                <div class="board-title">
+                    <h1>Dashboard Overview</h1>
+                    <p>Track your projects, tickets, and calendar events</p>
+                </div>
+                <div class="board-actions">
+                    <button class="btn btn-outline" id="refreshBtn">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                    <button class="btn btn-primary" id="addEventBtn">
+                        <i class="fas fa-plus"></i> Add Event
+                    </button>
+                </div>
+            </div>
+
+            <div class="dashboard-container">
+                <!-- Calendar Card -->
+                <div class="dashboard-card large">
+                    <div class="card-header">
+                        <h2><i class="fas fa-calendar-alt"></i> Calendar</h2>
+                        <div class="calendar-nav">
+                            <button id="prevMonth"><i class="fas fa-chevron-left"></i></button>
+                            <span class="current-month" id="currentMonth">January 2024</span>
+                            <button id="nextMonth"><i class="fas fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                    <div class="calendar" id="calendar"></div>
+                </div>
+
+                <!-- Ticket Statistics Card -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-chart-bar"></i> Ticket Statistics</h2>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="ticketChart"></canvas>
+                    </div>
+                    <div class="stats-grid">
+                        <div class="stat-card backlog">
+                            <h3 id="backlogCount">0</h3>
+                            <p>Backlog</p>
+                        </div>
+                        <div class="stat-card todo">
+                            <h3 id="todoCount">0</h3>
+                            <p>To Do</p>
+                        </div>
+                        <div class="stat-card inprogress">
+                            <h3 id="inprogressCount">0</h3>
+                            <p>In Progress</p>
+                        </div>
+                        <div class="stat-card done">
+                            <h3 id="doneCount">0</h3>
+                            <p>Done</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upcoming Events Card -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-clock"></i> Upcoming Events</h2>
+                    </div>
+                    <div class="events-list" id="eventsList">
+                        <!-- Events will be added here dynamically -->
+                        <div class="no-events" id="noEvents">No upcoming events</div>
+                    </div>
+                    <button class="btn btn-outline add-event-btn" id="addEventBtn2">
+                        <i class="fas fa-plus"></i> Add New Event
+                    </button>
+                </div>
+
+                <!-- Priority Distribution Card -->
+                <div class="dashboard-card">
+                    <div class="card-header">
+                        <h2><i class="fas fa-exclamation-circle"></i> Priority Distribution</h2>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="priorityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Add Event Modal -->
+    <div class="modal-overlay event-modal" id="eventModalOverlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Add Calendar Event</h2>
+                <button class="close-modal" id="closeEventModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="eventForm">
+                    <div class="form-group">
+                        <label for="eventTitle">Event Title *</label>
+                        <input type="text" id="eventTitle" class="form-control" placeholder="Enter event title"
+                            required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDescription">Description</label>
+                        <textarea id="eventDescription" class="form-control" placeholder="Event description"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventDate">Date *</label>
+                        <input type="date" id="eventDate" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="eventTime">Time</label>
+                        <input type="time" id="eventTime" class="form-control">
+                    </div>
+                    <div class="form-group">
+                        <label for="eventType">Event Type</label>
+                        <select id="eventType" class="form-control">
+                            <option value="meeting">Meeting</option>
+                            <option value="deadline">Deadline</option>
+                            <option value="personal">Personal</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-outline" id="cancelEventBtn">Cancel</button>
+                <button class="btn btn-primary" id="saveEventBtn">Save Event</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="dashboard.js"></script>
+</body>
+
+</html>
