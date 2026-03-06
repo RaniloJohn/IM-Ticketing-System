@@ -1,10 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ALD Ticketing System</title>
+    <title>ALD Incident Management System</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -14,18 +14,25 @@
     <!-- Header -->
     <header>
         <div class="logo">
-            <i class="fas fa-tasks"></i>
-            <span>ALD Ticketing System</span>
+            <i class="fas fa-shield-alt"></i>
+            <span>ALD Incident Management</span>
         </div>
         <nav>
             <ul>
                 <li><a href="#" class="active" id="projectsLink">Projects</a></li>
                 <li><a href="#" id="boardLink">Board</a></li>
                 <li><a href="#" id="reportsLink">Reports</a></li>
-                <li><a href="#" id="issuesLink">Issues</a></li>
+                <li><a href="#" id="issuesLink">Incidents</a></li>
             </ul>
         </nav>
         <div class="user-info">
+            <div class="notif-wrapper">
+                <button class="notif-bell" id="notifBellBtn" title="Watched Incidents">
+                    <i class="fas fa-bell"></i>
+                    <span class="notif-badge" id="notifBadge" style="display:none">0</span>
+                </button>
+                <div class="notif-dropdown" id="notifDropdown"></div>
+            </div>
             <span>John Doe</span>
             <div class="user-avatar">JD</div>
         </div>
@@ -68,11 +75,11 @@
         <!-- Main Content -->
         <main class="main-content">
 
-            <!-- ① Projects Page -->
+            <!-- â‘  Projects Page -->
             <div id="projectsPage" class="page">
                 <div class="page-header">
                     <h1>Projects</h1>
-                    <p>Create and manage your projects</p>
+                    <p>Create and manage your incident management projects</p>
                 </div>
                 <div class="projects-grid" id="projectsGrid">
                     <div class="no-projects-message" id="emptyProjectsMessage">
@@ -86,7 +93,7 @@
                 </div>
             </div>
 
-            <!-- ② Board Page -->
+            <!-- â‘¡ Board Page -->
             <div id="boardPage" class="page" style="display: none;">
                 <div class="board-header">
                     <div class="board-title">
@@ -107,7 +114,7 @@
                             <i class="fas fa-filter"></i> Filter
                         </button>
                         <button class="btn btn-primary" id="createTicketBtn">
-                            <i class="fas fa-plus"></i> Create Issue
+                            <i class="fas fa-plus"></i> Add Incident
                         </button>
                     </div>
                 </div>
@@ -122,37 +129,37 @@
 
                 <!-- Kanban Board -->
                 <div class="board-container" id="boardContainer">
-                    <div class="board-column backlog" data-status="backlog">
+                    <div class="board-column status-new" data-status="new">
                         <div class="column-header">
-                            <div class="column-title"><i class="fas fa-inbox"></i> Backlog<span
+                            <div class="column-title"><i class="fas fa-circle-notch"></i> New<span
                                     class="ticket-count">0</span></div>
                             <i class="fas fa-ellipsis-h"></i>
                         </div>
-                        <div class="column-content" id="backlogColumn"></div>
+                        <div class="column-content" id="newColumn"></div>
                     </div>
-                    <div class="board-column todo" data-status="todo">
+                    <div class="board-column status-active" data-status="active">
                         <div class="column-header">
-                            <div class="column-title"><i class="fas fa-clipboard-list"></i> To Do<span
+                            <div class="column-title"><i class="fas fa-bolt"></i> Active<span
                                     class="ticket-count">0</span></div>
                             <i class="fas fa-ellipsis-h"></i>
                         </div>
-                        <div class="column-content" id="todoColumn"></div>
+                        <div class="column-content" id="activeColumn"></div>
                     </div>
-                    <div class="board-column inprogress" data-status="inprogress">
+                    <div class="board-column status-resolved" data-status="resolved">
                         <div class="column-header">
-                            <div class="column-title"><i class="fas fa-spinner"></i> In Progress<span
+                            <div class="column-title"><i class="fas fa-check-double"></i> Resolved<span
                                     class="ticket-count">0</span></div>
                             <i class="fas fa-ellipsis-h"></i>
                         </div>
-                        <div class="column-content" id="inprogressColumn"></div>
+                        <div class="column-content" id="resolvedColumn"></div>
                     </div>
-                    <div class="board-column done" data-status="done">
+                    <div class="board-column status-closed" data-status="closed">
                         <div class="column-header">
-                            <div class="column-title"><i class="fas fa-check-circle"></i> Done<span
+                            <div class="column-title"><i class="fas fa-lock"></i> Closed<span
                                     class="ticket-count">0</span></div>
                             <i class="fas fa-ellipsis-h"></i>
                         </div>
-                        <div class="column-content" id="doneColumn"></div>
+                        <div class="column-content" id="closedColumn"></div>
                     </div>
                 </div>
 
@@ -163,10 +170,10 @@
                             style="max-width:320px;">
                         <select id="listStatusFilter" class="form-control" style="max-width:150px;">
                             <option value="">All Statuses</option>
-                            <option value="backlog">Backlog</option>
-                            <option value="todo">To Do</option>
-                            <option value="inprogress">In Progress</option>
-                            <option value="done">Done</option>
+                            <option value="new">New</option>
+                            <option value="active">Active</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="closed">Closed</option>
                         </select>
                         <select id="listPriorityFilter" class="form-control" style="max-width:150px;">
                             <option value="">All Priorities</option>
@@ -186,7 +193,6 @@
                                     <th data-sort="priority">Priority <i class="fas fa-sort"></i></th>
                                     <th data-sort="type">Type <i class="fas fa-sort"></i></th>
                                     <th data-sort="assignee_name">Assignee <i class="fas fa-sort"></i></th>
-                                    <th data-sort="story_points">SP <i class="fas fa-sort"></i></th>
                                     <th data-sort="due_date">Due Date <i class="fas fa-sort"></i></th>
                                     <th>Escalated</th>
                                 </tr>
@@ -197,7 +203,7 @@
                 </div>
             </div>
 
-            <!-- ③ Reports Page -->
+            <!-- â‘¢ Reports Page -->
             <div id="reportsPage" class="page" style="display: none;">
                 <div class="page-header">
                     <h1><i class="fas fa-chart-bar"></i> Reports</h1>
@@ -236,7 +242,7 @@
                 </div>
             </div>
 
-            <!-- ④ Timeline Page -->
+            <!-- â‘£ Timeline Page -->
             <div id="timelinePage" class="page" style="display: none;">
                 <div class="page-header">
                     <h1><i class="fas fa-calendar-alt"></i> Timeline</h1>
@@ -245,10 +251,10 @@
                 <div class="timeline-toolbar">
                     <select id="timelineStatusFilter" class="form-control" style="max-width:160px;">
                         <option value="">All Statuses</option>
-                        <option value="backlog">Backlog</option>
-                        <option value="todo">To Do</option>
-                        <option value="inprogress">In Progress</option>
-                        <option value="done">Done</option>
+                        <option value="new">New</option>
+                        <option value="active">Active</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="closed">Closed</option>
                     </select>
                     <select id="timelineAssigneeFilter" class="form-control" style="max-width:180px;">
                         <option value="">All Assignees</option>
@@ -265,35 +271,35 @@
         </main>
     </div>
 
-    <!-- ── Modals ─────────────────────────────────────────── -->
+    <!-- â”€â”€ Modals â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
 
     <!-- Create Ticket Modal -->
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal">
             <div class="modal-header">
-                <h2>Create Issue</h2>
+                <h2><i class="fas fa-plus-circle"></i> Add Incident</h2>
                 <button class="close-modal" id="closeModal">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="ticketForm">
                     <div class="form-group">
-                        <label for="ticketTitle">Issue Summary *</label>
-                        <input type="text" id="ticketTitle" class="form-control" placeholder="Enter a short description"
-                            required>
+                        <label for="ticketTitle">Incident Title *</label>
+                        <input type="text" id="ticketTitle" class="form-control"
+                            placeholder="Brief description of the incident" required>
                     </div>
                     <div class="form-group">
                         <label for="ticketDescription">Description</label>
                         <textarea id="ticketDescription" class="form-control"
-                            placeholder="Provide more details"></textarea>
+                            placeholder="Describe the incident, impact, and any steps already taken"></textarea>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="ticketStatus">Status</label>
                             <select id="ticketStatus" class="form-control">
-                                <option value="backlog">Backlog</option>
-                                <option value="todo" selected>To Do</option>
-                                <option value="inprogress">In Progress</option>
-                                <option value="done">Done</option>
+                                <option value="new" selected>New</option>
+                                <option value="active">Active</option>
+                                <option value="resolved">Resolved</option>
+                                <option value="closed">Closed</option>
                             </select>
                         </div>
                         <div class="form-group">
@@ -308,34 +314,22 @@
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="ticketType">Issue Type</label>
+                            <label for="ticketType">Incident Category</label>
                             <select id="ticketType" class="form-control">
-                                <option value="task">Task</option>
-                                <option value="bug">Bug</option>
-                                <option value="story">Story</option>
-                                <option value="epic">Epic</option>
+                                <option value="incident" selected>Incident</option>
+                                <option value="problem">Problem</option>
+                                <option value="change_request">Change Request</option>
+                                <option value="service_request">Service Request</option>
                             </select>
                         </div>
-                        <div class="form-group">
-                            <label for="ticketStoryPoints">Story Points</label>
-                            <select id="ticketStoryPoints" class="form-control">
-                                <option value="">—</option>
-                                <option value="1">1</option>
-                                <option value="2">2</option>
-                                <option value="3">3</option>
-                                <option value="5">5</option>
-                                <option value="8">8</option>
-                                <option value="13">13</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="form-row">
                         <div class="form-group">
                             <label for="ticketAssignee">Assignee</label>
                             <select id="ticketAssignee" class="form-control">
                                 <option value="">Unassigned</option>
                             </select>
                         </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label for="ticketDueDate">Due Date</label>
                             <input type="date" id="ticketDueDate" class="form-control">
@@ -344,13 +338,13 @@
                     <div class="form-group">
                         <label for="ticketLabels">Labels (comma-separated)</label>
                         <input type="text" id="ticketLabels" class="form-control"
-                            placeholder="e.g. frontend, bug, urgent">
+                            placeholder="e.g. network, server, critical">
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
                 <button class="btn btn-outline" id="cancelBtn">Cancel</button>
-                <button class="btn btn-primary" id="saveTicketBtn">Create Issue</button>
+                <button class="btn btn-primary" id="saveTicketBtn"><i class="fas fa-plus"></i> Add Incident</button>
             </div>
         </div>
     </div>
@@ -415,10 +409,10 @@
                         <label for="searchStatus">Status</label>
                         <select id="searchStatus" class="form-control">
                             <option value="">Any</option>
-                            <option value="backlog">Backlog</option>
-                            <option value="todo">To Do</option>
-                            <option value="inprogress">In Progress</option>
-                            <option value="done">Done</option>
+                            <option value="new">New</option>
+                            <option value="active">Active</option>
+                            <option value="resolved">Resolved</option>
+                            <option value="closed">Closed</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -437,10 +431,10 @@
                         <label for="searchType">Type</label>
                         <select id="searchType" class="form-control">
                             <option value="">Any</option>
-                            <option value="task">Task</option>
-                            <option value="bug">Bug</option>
-                            <option value="story">Story</option>
-                            <option value="epic">Epic</option>
+                            <option value="incident">Incident</option>
+                            <option value="problem">Problem</option>
+                            <option value="change_request">Change Request</option>
+                            <option value="service_request">Service Request</option>
                         </select>
                     </div>
                     <div class="form-group">

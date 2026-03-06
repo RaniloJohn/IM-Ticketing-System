@@ -46,6 +46,23 @@ router.get('/', (req, res) => {
     res.json(params.length ? db.all(query, params) : db.all(query));
 });
 
+// GET /api/tickets/notifications — all watched incidents for current user
+router.get('/notifications', (req, res) => {
+    const db = getDb();
+    const rows = db.all(`
+        SELECT t.id, t.title, t.status, t.priority, t.is_escalated,
+               (SELECT note FROM ticket_audit_log
+                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_note,
+               (SELECT timestamp FROM ticket_audit_log
+                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_at
+        FROM tickets t
+        JOIN ticket_watchers tw ON tw.ticket_id = t.id
+        WHERE tw.user_initials = ?
+        ORDER BY latest_at DESC
+    `, [req.user.initials]);
+    res.json(rows);
+});
+
 // GET /api/tickets/:id
 router.get('/:id', (req, res) => {
     const db = getDb();
@@ -296,4 +313,24 @@ router.delete('/:id/watch', (req, res) => {
     res.json({ message: 'Unwatched ticket.' });
 });
 
+// ─── NOTIFICATIONS ─────────────────────────────────────────────────────────────
+
+// GET /api/tickets/notifications — all watched incidents for current user
+router.get('/notifications', (req, res) => {
+    const db = getDb();
+    const rows = db.all(`
+        SELECT t.id, t.title, t.status, t.priority, t.is_escalated,
+               (SELECT note FROM ticket_audit_log
+                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_note,
+               (SELECT timestamp FROM ticket_audit_log
+                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_at
+        FROM tickets t
+        JOIN ticket_watchers tw ON tw.ticket_id = t.id
+        WHERE tw.user_initials = ?
+        ORDER BY latest_at DESC
+    `, [req.user.initials]);
+    res.json(rows);
+});
+
 module.exports = router;
+

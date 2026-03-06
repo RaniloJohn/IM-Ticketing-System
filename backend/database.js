@@ -159,21 +159,21 @@ function seedInitialData(db) {
   // Seed a sprint
   db.run(
     'INSERT INTO sprints (project_id, name, goal, status, start_date, end_date) VALUES (?, ?, ?, ?, ?, ?)',
-    [projectId, 'Sprint 1', 'Initial sprint to set up core features', 'active', '2026-02-23', '2026-03-08']
+    [projectId, 'Sprint 1', 'Initial sprint to set up core features', 'active', '2026-02-28', '2026-03-14']
   );
   const sprint = db.get('SELECT id FROM sprints WHERE project_id = ? ORDER BY id DESC', [projectId]);
   const sprintId = sprint.id;
 
   // Sample tickets
   const sampleTickets = [
-    { id: 'DP-101', sprint: sprintId, title: 'Design homepage mockup', desc: 'Create initial mockup for new homepage', status: 'backlog', priority: 'high', type: 'story', sp: 5, assignee: 'JD', reporter: 'JD', labels: 'design' },
-    { id: 'DP-102', sprint: sprintId, title: 'Fix responsive layout issues', desc: 'Mobile view breaks on product listing page', status: 'todo', priority: 'high', type: 'bug', sp: 3, assignee: 'AJ', reporter: 'JD', labels: 'frontend,bug' },
-    { id: 'DP-103', sprint: sprintId, title: 'Implement user authentication', desc: 'Create login and registration functionality', status: 'inprogress', priority: 'medium', type: 'story', sp: 8, assignee: 'RS', reporter: 'JD', labels: 'backend,auth' },
-    { id: 'DP-104', sprint: sprintId, title: 'Update colour scheme', desc: 'Apply new brand colours to all components', status: 'todo', priority: 'medium', type: 'task', sp: 2, assignee: 'MB', reporter: 'AJ', labels: 'design' },
-    { id: 'DP-105', sprint: sprintId, title: 'Add product search feature', desc: 'Implement search with filters', status: 'inprogress', priority: 'high', type: 'story', sp: 8, assignee: 'JD', reporter: 'RS', labels: 'frontend' },
-    { id: 'DP-106', sprint: null, title: 'Optimise image loading', desc: 'Implement lazy loading for product images', status: 'done', priority: 'low', type: 'task', sp: 2, assignee: 'AJ', reporter: 'JD', labels: 'performance' },
-    { id: 'DP-107', sprint: null, title: 'Fix checkout process bug', desc: 'Payment fails for orders over $1000', status: 'done', priority: 'high', type: 'bug', sp: 5, assignee: 'RS', reporter: 'MB', labels: 'bug,backend' },
-    { id: 'DP-108', sprint: null, title: 'Create admin dashboard', desc: 'Design and implement admin interface', status: 'backlog', priority: 'medium', type: 'epic', sp: 13, assignee: 'MB', reporter: 'JD', labels: 'admin' },
+    { id: 'DP-101', sprint: sprintId, title: 'Network outage in Building A', desc: 'Complete network failure affecting all users in Building A. ISP notified.', status: 'new', priority: 'high', type: 'incident', sp: 5, assignee: 'JD', reporter: 'JD', labels: 'network,infrastructure' },
+    { id: 'DP-102', sprint: sprintId, title: 'Email server unresponsive', desc: 'Exchange server not accepting connections since 08:00 AM. Multiple users affected.', status: 'active', priority: 'high', type: 'incident', sp: 3, assignee: 'AJ', reporter: 'JD', labels: 'email,server' },
+    { id: 'DP-103', sprint: sprintId, title: 'VPN service degraded performance', desc: 'Remote users reporting slow VPN throughput. Under investigation.', status: 'active', priority: 'medium', type: 'problem', sp: 8, assignee: 'RS', reporter: 'JD', labels: 'vpn,network' },
+    { id: 'DP-104', sprint: sprintId, title: 'Printer offline in HR department', desc: 'HP LaserJet in HR room 204 offline. Toner may need replacement.', status: 'new', priority: 'medium', type: 'service_request', sp: 2, assignee: 'MB', reporter: 'AJ', labels: 'hardware' },
+    { id: 'DP-105', sprint: sprintId, title: 'Database backup failure', desc: 'Nightly backup job failed on prod DB. Storage capacity may be exceeded.', status: 'active', priority: 'high', type: 'incident', sp: 8, assignee: 'JD', reporter: 'RS', labels: 'database,backup' },
+    { id: 'DP-106', sprint: null, title: 'SSL certificate renewal', desc: 'Renewed SSL certificate for main domain. Deployed and verified.', status: 'resolved', priority: 'low', type: 'change_request', sp: 2, assignee: 'AJ', reporter: 'JD', labels: 'security' },
+    { id: 'DP-107', sprint: null, title: 'Firewall rule misconfiguration', desc: 'Incorrect firewall rule blocked internal traffic. Corrected and tested.', status: 'closed', priority: 'high', type: 'incident', sp: 5, assignee: 'RS', reporter: 'MB', labels: 'security,network' },
+    { id: 'DP-108', sprint: null, title: 'Server room temperature alert', desc: 'HVAC readings above threshold. Facilities team engaged. Monitoring in progress.', status: 'new', priority: 'medium', type: 'problem', sp: 13, assignee: 'MB', reporter: 'JD', labels: 'infrastructure,hardware' },
   ];
 
   for (const t of sampleTickets) {
@@ -184,7 +184,7 @@ function seedInitialData(db) {
     );
     db.run(
       'INSERT INTO ticket_audit_log (ticket_id, changed_by, action, note) VALUES (?, ?, ?, ?)',
-      [t.id, t.reporter, 'created', `Ticket created — Status: ${t.status}, Priority: ${t.priority}, Type: ${t.type}`]
+      [t.id, t.reporter, 'created', `Incident created — Status: ${t.status}, Priority: ${t.priority}, Type: ${t.type}`]
     );
   }
 

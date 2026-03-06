@@ -70,6 +70,7 @@ async function initializeApp() {
   await loadProjects();
   setupEventListeners();
   setupDragAndDrop();
+  setupNotifications();
 }
 
 // ── User info & logout ────────────────────────────────────────────────────────
@@ -181,7 +182,7 @@ async function loadBoard() {
 }
 
 function renderBoard(tickets) {
-  ['backlog', 'todo', 'inprogress', 'done'].forEach(s => { const c = document.getElementById(`${s}Column`); if (c) c.innerHTML = ''; });
+  ['new', 'active', 'resolved', 'closed'].forEach(s => { const c = document.getElementById(`${s}Column`); if (c) c.innerHTML = ''; });
   tickets.forEach(t => {
     const col = document.getElementById(`${t.status}Column`);
     if (col) col.appendChild(createTicketElement(t));
@@ -207,7 +208,7 @@ function createTicketElement(ticket) {
     <div class="ticket-footer">
       <div style="display:flex;gap:6px;align-items:center;">
         <div class="ticket-type">${ticket.type}</div>
-        ${ticket.story_points ? `<span class="story-points-badge">${ticket.story_points}</span>` : ''}
+        ${ticket.story_points ? `` : ''}
         ${ticket.subtask_count > 0 ? `<span class="subtask-count"><i class="fas fa-sitemap"></i>${ticket.subtask_count}</span>` : ''}
         ${ticket.comment_count > 0 ? `<span class="comment-count"><i class="fas fa-comment"></i>${ticket.comment_count}</span>` : ''}
       </div>
@@ -222,7 +223,7 @@ function createTicketElement(ticket) {
 }
 
 function updateTicketCounts() {
-  ['backlog', 'todo', 'inprogress', 'done'].forEach(s => {
+  ['new', 'active', 'resolved', 'closed'].forEach(s => {
     const col = document.getElementById(`${s}Column`);
     const countEl = col?.closest('.board-column')?.querySelector('.ticket-count');
     if (countEl) countEl.textContent = col.children.length;
@@ -265,11 +266,11 @@ function renderListView(tickets) {
   const tbody = document.getElementById('listViewBody');
   tbody.innerHTML = filtered.length ? '' : '<tr><td colspan="9" style="text-align:center;padding:32px;color:#5e6c84">No tickets match the current filters.</td></tr>';
 
-  const statusColors = { backlog: '#ff5630', todo: '#ff8b00', inprogress: '#0052cc', done: '#36b37e' };
+  const statusColors = { new: '#0052cc', active: '#ff8b00', resolved: '#36b37e', closed: '#6554c0' };
   const priorityColors = { critical: '#d32f2f', high: '#f57c00', medium: '#0052cc', low: '#388e3c' };
 
   filtered.forEach(t => {
-    const isOverdue = t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done';
+    const isOverdue = t.due_date && new Date(t.due_date) < new Date() && t.status !== 'closed';
     const tr = document.createElement('tr');
     tr.className = 'list-row';
     tr.innerHTML = `
@@ -282,7 +283,6 @@ function renderListView(tickets) {
       <td><span class="priority-pill" style="background:${priorityColors[t.priority] || '#999'}">${t.priority}</span></td>
       <td><span class="type-pill">${t.type}</span></td>
       <td>${escHtml(t.assignee_name || t.assignee_initials || '—')}</td>
-      <td style="text-align:center">${t.story_points ? `<span class="story-points-badge">${t.story_points}</span>` : '—'}</td>
       <td style="${isOverdue ? 'color:#ff5630;font-weight:600' : ''}">${t.due_date ? `<i class="fas fa-calendar-day" style="margin-right:4px;opacity:.6"></i>${t.due_date}${isOverdue ? ' <i class="fas fa-exclamation-circle"></i>' : ''}` : '—'}</td>
       <td style="text-align:center">${t.is_escalated ? '<i class="fas fa-fire" style="color:#ff5630"></i>' : ''}</td>`;
     tr.addEventListener('click', () => openSidePanel(t.id));
@@ -340,90 +340,149 @@ async function handleDrop(e) {
   const draggedEl = document.querySelector(`[data-id="${ticketId}"]`);
   if (!draggedEl) return;
   const newStatus = col.closest('.board-column').getAttribute('data-status');
+
+  // Strict forward-only workflow check
+  const ticket = boardTickets.find(t => t.id === ticketId);
+  if (!ticket) return;
+  const currentStatus = ticket.status;
+
+  const statusOrder = { 'new': 0, 'active': 1, 'resolved': 2, 'closed': 3 };
+  if (statusOrder[newStatus] < statusOrder[currentStatus]) {
+    showNotification('Incidents cannot be moved backwards in the workflow.', 'error');
+    return;
+  }
+
   draggedEl.classList.remove('dragging');
   draggedEl.className = `ticket ${newStatus}`;
   col.appendChild(draggedEl);
   updateTicketCounts();
   try {
     await api(`/tickets/${ticketId}`, { method: 'PUT', body: JSON.stringify({ status: newStatus }) });
-    const cached = boardTickets.find(t => t.id === ticketId);
-    if (cached) cached.status = newStatus;
+    ticket.status = newStatus;
   } catch { showNotification('Failed to update ticket status.', 'error'); await loadBoard(); }
 }
 
-// ── Side Panel ────────────────────────────────────────────────────────────────
 function injectSidePanelHTML() {
-  if (document.getElementById('sidePanel')) return;
-  const panel = document.createElement('div');
-  panel.id = 'sidePanel'; panel.className = 'side-panel';
-  panel.innerHTML = `
-    <div class="side-panel-overlay" id="sidePanelOverlay"></div>
-    <div class="side-panel-content">
-      <div class="side-panel-header">
-        <span id="spTicketId" class="sp-ticket-id"></span>
-        <div class="sp-header-actions">
+  if (document.getElementById('incidentModal')) return;
+  const modal = document.createElement('div');
+  modal.id = 'incidentModal';
+  modal.className = 'incident-modal-overlay';
+  modal.innerHTML = `
+    <div class="incident-modal">
+      <div class="incident-modal-header">
+        <div class="incident-modal-title-row">
+          <div class="incident-id-badge" id="spTicketId"></div>
+          <h2 id="spTitle" class="incident-title" contenteditable="true"></h2>
+        </div>
+        <div class="incident-modal-header-actions">
           <button id="spEscalateBtn" class="btn btn-small btn-outline"><i class="fas fa-exclamation-triangle"></i> Escalate</button>
-          <button id="spDeleteBtn" class="btn btn-small btn-danger" title="Delete this ticket"><i class="fas fa-trash"></i> Delete</button>
-          <button id="spCloseBtn" class="btn btn-small btn-outline"><i class="fas fa-times"></i></button>
+          <button id="spCloseBtn" class="btn btn-small btn-outline"><i class="fas fa-times"></i> Close</button>
         </div>
       </div>
-      <div class="side-panel-body">
-        <h2 id="spTitle" class="sp-title" contenteditable="true"></h2>
-        <div class="sp-section"><label>Status</label><div id="spStatusBtns" class="status-transition-btns"></div></div>
-        <div class="sp-meta-grid">
-          <div class="sp-meta-item"><label>Type</label><select id="spType" class="sp-select"><option value="task">Task</option><option value="bug">Bug</option><option value="story">Story</option><option value="epic">Epic</option></select></div>
-          <div class="sp-meta-item"><label>Priority</label><select id="spPriority" class="sp-select"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div>
-          <div class="sp-meta-item"><label>Assignee</label><select id="spAssignee" class="sp-select"></select></div>
-          <div class="sp-meta-item"><label>Reporter</label><div id="spReporter" class="sp-text"></div></div>
-          <div class="sp-meta-item"><label>Story Points</label><select id="spStoryPoints" class="sp-select"><option value="">-</option><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="5">5</option><option value="8">8</option><option value="13">13</option></select></div>
-          <div class="sp-meta-item"><label>Due Date</label><input type="date" id="spDueDate" class="sp-input"></div>
-          <div class="sp-meta-item" style="grid-column:span 2"><label>Labels</label><input type="text" id="spLabels" placeholder="frontend, bug, urgent" class="sp-input"></div>
-        </div>
-        <div class="sp-section">
-          <label>Description</label>
-          <textarea id="spDescription" class="sp-textarea" rows="4" placeholder="Add a description..."></textarea>
-          <button class="btn btn-small btn-outline" id="spSaveDescBtn" style="margin-top:6px"><i class="fas fa-save"></i> Save</button>
-        </div>
-        <div class="sp-section">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-            <label style="margin:0">Watchers</label>
-            <button id="spWatchBtn" class="btn btn-small btn-outline">☆ Watch</button>
+      <div class="incident-modal-body">
+        <div class="incident-modal-left">
+          <div class="sp-section">
+            <label><i class="fas fa-traffic-light"></i> Status</label>
+            <div id="spStatusBtns" class="status-transition-btns"></div>
           </div>
-          <div id="spWatchers" class="sp-watchers"></div>
-        </div>
-        <div class="sp-section">
-          <label>Subtasks</label>
-          <div id="spSubtasks"></div>
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <input type="text" id="spSubtaskInput" placeholder="Add a subtask..." class="sp-input" style="flex:1">
-            <button class="btn btn-small btn-primary" id="spAddSubtaskBtn">Add</button>
+          <div class="sp-section">
+            <label><i class="fas fa-align-left"></i> Description</label>
+            <div class="rte-toolbar" id="spDescToolbar">
+              <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
+              <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
+              <button type="button" data-cmd="insertUnorderedList" title="Bullet List"><i class="fas fa-list-ul"></i></button>
+            </div>
+            <div id="spDescription" class="rte-body" contenteditable="true" placeholder="Describe the incident, impact, and steps taken..."></div>
+            <button class="btn btn-small btn-outline" id="spSaveDescBtn" style="margin-top:8px"><i class="fas fa-save"></i> Save Description</button>
+          </div>
+          <div class="sp-section">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+              <label style="margin:0"><i class="fas fa-eye"></i> Watchers</label>
+              <button id="spWatchBtn" class="btn btn-small btn-outline">&#9734; Watch</button>
+            </div>
+            <div id="spWatchers" class="sp-watchers"></div>
+          </div>
+          <div class="sp-section">
+            <label><i class="fas fa-sitemap"></i> Subtasks</label>
+            <div id="spSubtasks"></div>
+            <div style="display:flex;gap:8px;margin-top:10px">
+              <input type="text" id="spSubtaskInput" placeholder="Add a subtask..." class="sp-input" style="flex:1">
+              <button class="btn btn-small btn-primary" id="spAddSubtaskBtn">Add</button>
+            </div>
+          </div>
+          <div class="sp-section">
+            <label><i class="fas fa-comments"></i> Comments</label>
+            <div id="spComments"></div>
+            <div style="display:flex;gap:10px;margin-top:12px;align-items:flex-end">
+              <textarea id="spCommentInput" class="sp-textarea" rows="3" placeholder="Add a comment or update..." style="flex:1"></textarea>
+              <button class="btn btn-small btn-primary" id="spAddCommentBtn"><i class="fas fa-paper-plane"></i></button>
+            </div>
+          </div>
+          <div class="sp-section">
+            <label><i class="fas fa-history"></i> Activity Log</label>
+            <div id="spAuditLog" class="sp-audit-log"></div>
           </div>
         </div>
-        <div class="sp-section">
-          <label>Comments</label>
-          <div id="spComments"></div>
-          <div style="display:flex;gap:10px;margin-top:10px">
-            <textarea id="spCommentInput" class="sp-textarea" rows="2" placeholder="Add a comment..." style="flex:1"></textarea>
-            <button class="btn btn-small btn-primary" id="spAddCommentBtn" style="align-self:flex-end"><i class="fas fa-paper-plane"></i></button>
+        <div class="incident-modal-right">
+          <div class="sp-section">
+            <label>Category</label>
+            <select id="spType" class="sp-select">
+              <option value="incident">Incident</option>
+              <option value="problem">Problem</option>
+              <option value="change_request">Change Request</option>
+              <option value="service_request">Service Request</option>
+            </select>
           </div>
-        </div>
-        <div class="sp-section">
-          <label><i class="fas fa-history"></i> Activity Ledger</label>
-          <div id="spAuditLog" class="sp-audit-log"></div>
+          <div class="sp-section">
+            <label>Priority</label>
+            <select id="spPriority" class="sp-select"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select>
+          </div>
+          <div class="sp-section">
+            <label>Assignee</label>
+            <select id="spAssignee" class="sp-select"></select>
+          </div>
+          <div class="sp-section">
+            <label>Reporter</label>
+            <div id="spReporter" class="sp-text"></div>
+          </div>
+          <div class="sp-section">
+            <label>Due Date</label>
+            <input type="date" id="spDueDate" class="sp-input">
+          </div>
+          <div class="sp-section">
+            <label>Labels</label>
+            <input type="text" id="spLabels" placeholder="network, server, critical" class="sp-input">
+          </div>
+          <div class="sp-section" style="margin-top:auto;padding-top:20px;border-top:1px solid var(--border)">
+            <div style="font-size:11px;color:var(--text-light);">
+              <div id="spCreatedAt"></div>
+              <div id="spUpdatedAt"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>`;
-  document.body.appendChild(panel);
-  document.getElementById('sidePanelOverlay').addEventListener('click', closeSidePanel);
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if (e.target === modal) closeSidePanel(); });
   document.getElementById('spCloseBtn').addEventListener('click', closeSidePanel);
   document.getElementById('spEscalateBtn').addEventListener('click', toggleEscalate);
-  document.getElementById('spDeleteBtn').addEventListener('click', deleteCurrentTicket);
   document.getElementById('spWatchBtn').addEventListener('click', toggleWatch);
   document.getElementById('spAddCommentBtn').addEventListener('click', addComment);
   document.getElementById('spAddSubtaskBtn').addEventListener('click', addSubtask);
-  document.getElementById('spSaveDescBtn').addEventListener('click', () => updateTicketField('description', document.getElementById('spDescription').value));
-  ['spType', 'spPriority', 'spAssignee', 'spStoryPoints'].forEach(id => {
-    const map = { spType: 'type', spPriority: 'priority', spAssignee: 'assignee_initials', spStoryPoints: 'story_points' };
+  // Wire up toolbar buttons for rich-text description
+  document.getElementById('spDescToolbar').querySelectorAll('button[data-cmd]').forEach(btn => {
+    btn.addEventListener('mousedown', e => {
+      e.preventDefault(); // prevent blur
+      document.getElementById('spDescription').focus();
+      document.execCommand(btn.dataset.cmd, false, null);
+    });
+  });
+  document.getElementById('spSaveDescBtn').addEventListener('click', () => {
+    const html = document.getElementById('spDescription').innerHTML;
+    updateTicketField('description', html);
+  });
+  ['spType', 'spPriority', 'spAssignee'].forEach(id => {
+    const map = { spType: 'type', spPriority: 'priority', spAssignee: 'assignee_initials' };
     document.getElementById(id).addEventListener('change', e => updateTicketField(map[id], e.target.value));
   });
   document.getElementById('spDueDate').addEventListener('change', e => updateTicketField('due_date', e.target.value));
@@ -436,7 +495,8 @@ function injectSidePanelHTML() {
 
 async function openSidePanel(ticketId) {
   currentPanelTicketId = ticketId;
-  document.getElementById('sidePanel').classList.add('open');
+  document.getElementById('incidentModal').classList.add('open');
+  document.body.style.overflow = 'hidden';
   await refreshSidePanel(ticketId);
 }
 
@@ -453,10 +513,9 @@ async function refreshSidePanel(id) {
 function renderSidePanel(ticket, comments, auditLog, subtasks) {
   document.getElementById('spTicketId').textContent = ticket.id;
   document.getElementById('spTitle').textContent = ticket.title;
-  document.getElementById('spDescription').value = ticket.description || '';
-  document.getElementById('spType').value = ticket.type || 'task';
+  document.getElementById('spDescription').innerHTML = ticket.description || '';
+  document.getElementById('spType').value = ticket.type || 'incident';
   document.getElementById('spPriority').value = ticket.priority || 'medium';
-  document.getElementById('spStoryPoints').value = ticket.story_points || '';
   document.getElementById('spDueDate').value = ticket.due_date || '';
   document.getElementById('spLabels').value = ticket.labels || '';
   document.getElementById('spReporter').textContent = ticket.reporter_name || ticket.reporter_initials || '—';
@@ -470,9 +529,23 @@ function renderSidePanel(ticket, comments, auditLog, subtasks) {
   esc.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${ticket.is_escalated ? 'Escalated ✓' : 'Escalate'}`;
   esc.dataset.currentVal = ticket.is_escalated;
 
-  const statuses = [['backlog', 'fa-inbox', 'Backlog'], ['todo', 'fa-clipboard-list', 'To Do'], ['inprogress', 'fa-spinner', 'In Progress'], ['done', 'fa-check-circle', 'Done']];
-  document.getElementById('spStatusBtns').innerHTML = statuses.map(([v, icon, lbl]) =>
-    `<button class="status-btn ${v}${ticket.status === v ? ' active' : ''}" onclick="updateTicketField('status','${v}')"><i class="fas ${icon}"></i> ${lbl}</button>`).join('');
+  const statuses = [['new', 'fa-circle-notch', 'New'], ['active', 'fa-bolt', 'Active'], ['resolved', 'fa-check-double', 'Resolved'], ['closed', 'fa-lock', 'Closed']];
+  const order = { 'new': 0, 'active': 1, 'resolved': 2, 'closed': 3 };
+  const currentLevel = order[ticket.status] || 0;
+
+  document.getElementById('spStatusBtns').innerHTML = statuses.map(([v, icon, lbl]) => {
+    const isPast = order[v] < currentLevel;
+    const isActive = ticket.status === v;
+    const disabledAttr = isPast ? 'disabled title="Cannot move backward"' : '';
+    const opacityStyle = isPast ? 'style="opacity:0.4;cursor:not-allowed"' : '';
+    return `<button class="status-btn ${v}${isActive ? ' active' : ''}" ${disabledAttr} ${opacityStyle} onclick="updateTicketField('status','${v}')"><i class="fas ${icon}"></i> ${lbl}</button>`;
+  }).join('');
+
+  // Timestamps
+  const created = document.getElementById('spCreatedAt');
+  const updated = document.getElementById('spUpdatedAt');
+  if (created) created.textContent = ticket.created_at ? `Created: ${fmtDate(ticket.created_at)}` : '';
+  if (updated) updated.textContent = ticket.updated_at ? `Updated: ${fmtDate(ticket.updated_at)}` : '';
 
   const isWatching = ticket.watchers?.some(w => w.user_initials === currentUser.initials);
   const wb = document.getElementById('spWatchBtn'); wb.textContent = isWatching ? '★ Watching' : '☆ Watch'; wb.dataset.watching = isWatching;
@@ -495,7 +568,8 @@ function renderSidePanel(ticket, comments, auditLog, subtasks) {
 }
 
 function closeSidePanel() {
-  document.getElementById('sidePanel').classList.remove('open');
+  document.getElementById('incidentModal').classList.remove('open');
+  document.body.style.overflow = '';
   currentPanelTicketId = null;
   loadBoard();
 }
@@ -588,7 +662,6 @@ async function handleTicketFormSubmit(e) {
         status: document.getElementById('ticketStatus').value,
         priority: document.getElementById('ticketPriority').value,
         type: document.getElementById('ticketType').value,
-        story_points: document.getElementById('ticketStoryPoints').value || null,
         assignee_initials: document.getElementById('ticketAssignee').value,
         due_date: document.getElementById('ticketDueDate').value || null,
         labels: document.getElementById('ticketLabels').value,
@@ -703,14 +776,14 @@ function buildReportCharts(tickets) {
   makeChart('rptAssigneeChart', 'bar', Object.keys(assigneeMap), Object.values(assigneeMap));
 
   // Escalated + overdue list
-  const atRisk = tickets.filter(t => t.is_escalated || (t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done'));
+  const atRisk = tickets.filter(t => t.is_escalated || (t.due_date && new Date(t.due_date) < new Date() && t.status !== 'closed'));
   const listEl = document.getElementById('rptEscalatedList');
   listEl.innerHTML = atRisk.length
     ? atRisk.map(t => `
         <div class="rpt-list-item" onclick="openSidePanel('${t.id}')">
           <span class="list-id">${escHtml(t.id)}</span>
           ${t.is_escalated ? '<span class="escalated-badge"><i class="fas fa-exclamation-triangle"></i> Escalated</span>' : ''}
-          ${t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done' ? '<span class="overdue-chip"><i class="fas fa-clock"></i> Overdue</span>' : ''}
+          ${t.due_date && new Date(t.due_date) < new Date() && t.status !== 'closed' ? '<span class="overdue-chip"><i class="fas fa-clock"></i> Overdue</span>' : ''}
           <span class="rpt-list-title">${escHtml(t.title)}</span>
           <span class="ml-auto">${escHtml(t.assignee_name || t.assignee_initials || 'Unassigned')}</span>
         </div>`).join('')
@@ -749,7 +822,7 @@ function renderTimeline(tickets) {
   emptyEl.style.display = 'none';
 
   const now = new Date();
-  const statusColors = { backlog: '#ff5630', todo: '#ff8b00', inprogress: '#0052cc', done: '#36b37e' };
+  const statusColors = { new: '#0052cc', active: '#ff8b00', resolved: '#36b37e', closed: '#6554c0' };
 
   // Group by month
   const groups = {};
@@ -766,7 +839,7 @@ function renderTimeline(tickets) {
       <div class="timeline-month-label"><i class="fas fa-calendar"></i> ${escHtml(g.label)}</div>
       ${g.tickets.map(t => {
     const d = new Date(t.due_date);
-    const isOverdue = d < now && t.status !== 'done';
+    const isOverdue = d < now && t.status !== 'closed';
     const color = statusColors[t.status] || '#999';
     return `<div class="timeline-item${isOverdue ? ' overdue' : ''}" onclick="openSidePanel('${t.id}')">
           <div class="timeline-dot" style="background:${color}"></div>
@@ -1145,5 +1218,71 @@ function injectStyles() {
   document.head.appendChild(s);
 }
 
-// ── Bootstrap ─────────────────────────────────────────────────────────────────
+// \u2500\u2500 Notifications Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+function setupNotifications() {
+  const bellBtn = document.getElementById('notifBellBtn');
+  const dropdown = document.getElementById('notifDropdown');
+  if (!bellBtn || !dropdown) return;
+  bellBtn.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if (dropdown.classList.contains('open')) {
+      dropdown.classList.remove('open');
+    } else {
+      await loadNotifications();
+      dropdown.classList.add('open');
+    }
+  });
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.notif-wrapper')) dropdown.classList.remove('open');
+  });
+}
+
+async function loadNotifications() {
+  const dropdown = document.getElementById('notifDropdown');
+  const badge = document.getElementById('notifBadge');
+  if (!dropdown) return;
+  try {
+    const items = await api('/tickets/notifications');
+    if (items.length > 0) {
+      badge.textContent = items.length;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+    const statusColors = { new: '#0052cc', active: '#ff8b00', resolved: '#36b37e', closed: '#6554c0' };
+    const statusLabels = { new: 'New', active: 'Active', resolved: 'Resolved', closed: 'Closed' };
+    const priorityColors = { critical: '#b71c1c', high: '#d32f2f', medium: '#f57c00', low: '#388e3c' };
+    if (items.length === 0) {
+      dropdown.innerHTML = `
+        <div class="notif-header"><i class="fas fa-bell"></i> Watched Incidents</div>
+        <div class="notif-empty"><i class="fas fa-eye-slash"></i><p>You aren't watching any incidents yet.</p></div>`;
+      return;
+    }
+    dropdown.innerHTML = `
+      <div class="notif-header"><i class="fas fa-bell"></i> Watched Incidents <span class="notif-count">${items.length}</span></div>
+      ${items.map(n => `
+        <div class="notif-item" data-id="${escHtml(n.id)}">
+          <div class="notif-item-top">
+            <span class="notif-id">${escHtml(n.id)}</span>
+            <span class="notif-status-pill" style="background:${statusColors[n.status] || '#999'}">${statusLabels[n.status] || n.status}</span>
+            <span class="notif-priority" style="color:${priorityColors[n.priority] || '#999'};font-weight:600;font-size:11px;text-transform:uppercase">${n.priority}</span>
+            ${n.is_escalated ? '<span class="notif-escalated" title="Escalated"><i class="fas fa-exclamation-triangle"></i></span>' : ''}
+          </div>
+          <div class="notif-title">${escHtml(n.title)}</div>
+          ${n.latest_note ? `<div class="notif-activity"><i class="fas fa-clock"></i> ${fmtDate(n.latest_at)} &mdash; ${escHtml(n.latest_note)}</div>` : ''}
+        </div>`).join('')}`;
+    dropdown.querySelectorAll('.notif-item').forEach(el => {
+      el.addEventListener('click', () => {
+        document.getElementById('notifDropdown').classList.remove('open');
+        openSidePanel(el.dataset.id);
+      });
+    });
+  } catch (err) {
+    dropdown.innerHTML = `<div class="notif-header">Notifications</div><div class="notif-empty"><p>Failed to load notifications.</p></div>`;
+  }
+}
+
+// \u2500\u2500 Bootstrap \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 document.addEventListener('DOMContentLoaded', initializeApp);
+
