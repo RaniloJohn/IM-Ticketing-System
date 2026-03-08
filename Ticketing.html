@@ -292,48 +292,19 @@
                         <textarea id="ticketDescription" class="form-control"
                             placeholder="Describe the incident, impact, and any steps already taken"></textarea>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="ticketStatus">Status</label>
-                            <select id="ticketStatus" class="form-control">
-                                <option value="new" selected>New</option>
-                                <option value="active">Active</option>
-                                <option value="resolved">Resolved</option>
-                                <option value="closed">Closed</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="ticketPriority">Priority</label>
-                            <select id="ticketPriority" class="form-control">
-                                <option value="low">Low</option>
-                                <option value="medium" selected>Medium</option>
-                                <option value="high">High</option>
-                                <option value="critical">Critical</option>
-                            </select>
-                        </div>
+                    <div class="form-group">
+                        <label for="ticketBusinessImpact">Business Impact</label>
+                        <textarea id="ticketBusinessImpact" class="form-control"
+                            placeholder="How does this incident affect business operations?"></textarea>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="ticketType">Incident Category</label>
-                            <select id="ticketType" class="form-control">
-                                <option value="incident" selected>Incident</option>
-                                <option value="problem">Problem</option>
-                                <option value="change_request">Change Request</option>
-                                <option value="service_request">Service Request</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
-                            <label for="ticketAssignee">Assignee</label>
-                            <select id="ticketAssignee" class="form-control">
-                                <option value="">Unassigned</option>
-                            </select>
-                        </div>
+                    <div class="form-group">
+                        <label for="ticketNextStep">Next Step</label>
+                        <textarea id="ticketNextStep" class="form-control"
+                            placeholder="What actions are planned next?"></textarea>
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="ticketDueDate">Due Date</label>
-                            <input type="date" id="ticketDueDate" class="form-control">
-                        </div>
+                    <div class="form-group">
+                        <label for="ticketAssignee">Assignee</label>
+                        <input type="text" id="ticketAssignee" class="form-control" placeholder="Enter assignee name">
                     </div>
                     <div class="form-group">
                         <label for="ticketLabels">Labels (comma-separated)</label>

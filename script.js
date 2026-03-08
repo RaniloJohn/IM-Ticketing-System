@@ -91,7 +91,7 @@ function injectUserInfo() {
 async function loadUsers() {
   try { allUsers = await api('/users'); } catch { allUsers = []; }
   // Populate all user selects
-  ['ticketAssignee', 'projectLead', 'searchAssignee', 'timelineAssigneeFilter'].forEach(id => {
+  ['projectLead', 'searchAssignee', 'timelineAssigneeFilter'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     const hasEmpty = el.querySelector('option[value=""]');
@@ -372,10 +372,9 @@ function injectSidePanelHTML() {
       <div class="incident-modal-header">
         <div class="incident-modal-title-row">
           <div class="incident-id-badge" id="spTicketId"></div>
-          <h2 id="spTitle" class="incident-title" contenteditable="true"></h2>
+          <h2 id="spTitle" class="incident-title"></h2>
         </div>
         <div class="incident-modal-header-actions">
-          <button id="spEscalateBtn" class="btn btn-small btn-outline"><i class="fas fa-exclamation-triangle"></i> Escalate</button>
           <button id="spCloseBtn" class="btn btn-small btn-outline"><i class="fas fa-times"></i> Close</button>
         </div>
       </div>
@@ -387,13 +386,15 @@ function injectSidePanelHTML() {
           </div>
           <div class="sp-section">
             <label><i class="fas fa-align-left"></i> Description</label>
-            <div class="rte-toolbar" id="spDescToolbar">
-              <button type="button" data-cmd="bold" title="Bold"><b>B</b></button>
-              <button type="button" data-cmd="italic" title="Italic"><i>I</i></button>
-              <button type="button" data-cmd="insertUnorderedList" title="Bullet List"><i class="fas fa-list-ul"></i></button>
-            </div>
-            <div id="spDescription" class="rte-body" contenteditable="true" placeholder="Describe the incident, impact, and steps taken..."></div>
-            <button class="btn btn-small btn-outline" id="spSaveDescBtn" style="margin-top:8px"><i class="fas fa-save"></i> Save Description</button>
+            <div id="spDescription" class="rte-body" style="min-height:80px;"></div>
+          </div>
+          <div class="sp-section">
+            <label><i class="fas fa-exclamation-circle"></i> Business Impact</label>
+            <div id="spBusinessImpact" class="rte-body" style="min-height:60px;"></div>
+          </div>
+          <div class="sp-section">
+            <label><i class="fas fa-arrow-right"></i> Next Step</label>
+            <div id="spNextStep" class="rte-body" style="min-height:60px;"></div>
           </div>
           <div class="sp-section">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
@@ -425,33 +426,12 @@ function injectSidePanelHTML() {
         </div>
         <div class="incident-modal-right">
           <div class="sp-section">
-            <label>Category</label>
-            <select id="spType" class="sp-select">
-              <option value="incident">Incident</option>
-              <option value="problem">Problem</option>
-              <option value="change_request">Change Request</option>
-              <option value="service_request">Service Request</option>
-            </select>
-          </div>
-          <div class="sp-section">
-            <label>Priority</label>
-            <select id="spPriority" class="sp-select"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select>
-          </div>
-          <div class="sp-section">
             <label>Assignee</label>
-            <select id="spAssignee" class="sp-select"></select>
+            <div id="spAssignee" class="sp-text"></div>
           </div>
           <div class="sp-section">
             <label>Reporter</label>
             <div id="spReporter" class="sp-text"></div>
-          </div>
-          <div class="sp-section">
-            <label>Due Date</label>
-            <input type="date" id="spDueDate" class="sp-input">
-          </div>
-          <div class="sp-section">
-            <label>Labels</label>
-            <input type="text" id="spLabels" placeholder="network, server, critical" class="sp-input">
           </div>
           <div class="sp-section" style="margin-top:auto;padding-top:20px;border-top:1px solid var(--border)">
             <div style="font-size:11px;color:var(--text-light);">
@@ -465,32 +445,9 @@ function injectSidePanelHTML() {
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) closeSidePanel(); });
   document.getElementById('spCloseBtn').addEventListener('click', closeSidePanel);
-  document.getElementById('spEscalateBtn').addEventListener('click', toggleEscalate);
   document.getElementById('spWatchBtn').addEventListener('click', toggleWatch);
   document.getElementById('spAddCommentBtn').addEventListener('click', addComment);
   document.getElementById('spAddSubtaskBtn').addEventListener('click', addSubtask);
-  // Wire up toolbar buttons for rich-text description
-  document.getElementById('spDescToolbar').querySelectorAll('button[data-cmd]').forEach(btn => {
-    btn.addEventListener('mousedown', e => {
-      e.preventDefault(); // prevent blur
-      document.getElementById('spDescription').focus();
-      document.execCommand(btn.dataset.cmd, false, null);
-    });
-  });
-  document.getElementById('spSaveDescBtn').addEventListener('click', () => {
-    const html = document.getElementById('spDescription').innerHTML;
-    updateTicketField('description', html);
-  });
-  ['spType', 'spPriority', 'spAssignee'].forEach(id => {
-    const map = { spType: 'type', spPriority: 'priority', spAssignee: 'assignee_initials' };
-    document.getElementById(id).addEventListener('change', e => updateTicketField(map[id], e.target.value));
-  });
-  document.getElementById('spDueDate').addEventListener('change', e => updateTicketField('due_date', e.target.value));
-  document.getElementById('spLabels').addEventListener('blur', e => updateTicketField('labels', e.target.value));
-  document.getElementById('spTitle').addEventListener('blur', e => {
-    const v = e.target.textContent.trim();
-    if (v && currentPanelTicketId) updateTicketField('title', v);
-  });
 }
 
 async function openSidePanel(ticketId) {
@@ -513,21 +470,15 @@ async function refreshSidePanel(id) {
 function renderSidePanel(ticket, comments, auditLog, subtasks) {
   document.getElementById('spTicketId').textContent = ticket.id;
   document.getElementById('spTitle').textContent = ticket.title;
-  document.getElementById('spDescription').innerHTML = ticket.description || '';
-  document.getElementById('spType').value = ticket.type || 'incident';
-  document.getElementById('spPriority').value = ticket.priority || 'medium';
-  document.getElementById('spDueDate').value = ticket.due_date || '';
-  document.getElementById('spLabels').value = ticket.labels || '';
+  document.getElementById('spDescription').innerHTML = ticket.description || '<span style="color:#5e6c84;font-size:13px">No description</span>';
+  document.getElementById('spBusinessImpact').innerHTML = ticket.business_impact
+    ? escHtml(ticket.business_impact).replace(/\n/g, '<br>')
+    : '<span style="color:#5e6c84;font-size:13px">—</span>';
+  document.getElementById('spNextStep').innerHTML = ticket.next_step
+    ? escHtml(ticket.next_step).replace(/\n/g, '<br>')
+    : '<span style="color:#5e6c84;font-size:13px">—</span>';
+  document.getElementById('spAssignee').textContent = ticket.assignee_name || ticket.assignee_initials || 'Unassigned';
   document.getElementById('spReporter').textContent = ticket.reporter_name || ticket.reporter_initials || '—';
-
-  const assigneeSel = document.getElementById('spAssignee');
-  assigneeSel.innerHTML = '<option value="">Unassigned</option>';
-  allUsers.forEach(u => { const opt = new Option(u.full_name, u.initials); if (u.initials === ticket.assignee_initials) opt.selected = true; assigneeSel.add(opt); });
-
-  const esc = document.getElementById('spEscalateBtn');
-  esc.className = `btn btn-small ${ticket.is_escalated ? 'btn-primary' : 'btn-outline'}`;
-  esc.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${ticket.is_escalated ? 'Escalated ✓' : 'Escalate'}`;
-  esc.dataset.currentVal = ticket.is_escalated;
 
   const statuses = [['new', 'fa-circle-notch', 'New'], ['active', 'fa-bolt', 'Active'], ['resolved', 'fa-check-double', 'Resolved'], ['closed', 'fa-lock', 'Closed']];
   const order = { 'new': 0, 'active': 1, 'resolved': 2, 'closed': 3 };
@@ -659,11 +610,12 @@ async function handleTicketFormSubmit(e) {
       body: JSON.stringify({
         title,
         description: document.getElementById('ticketDescription').value,
-        status: document.getElementById('ticketStatus').value,
-        priority: document.getElementById('ticketPriority').value,
-        type: document.getElementById('ticketType').value,
-        assignee_initials: document.getElementById('ticketAssignee').value,
-        due_date: document.getElementById('ticketDueDate').value || null,
+        business_impact: document.getElementById('ticketBusinessImpact').value.trim() || null,
+        next_step: document.getElementById('ticketNextStep').value.trim() || null,
+        status: 'new',
+        priority: 'medium',
+        type: 'incident',
+        assignee_name: document.getElementById('ticketAssignee').value.trim() || null,
         labels: document.getElementById('ticketLabels').value,
         project_id: currentProjectId,
         sprint_id: currentActiveSprint ? currentActiveSprint.id : null

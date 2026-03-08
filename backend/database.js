@@ -122,6 +122,13 @@ function initializeDatabase() {
     );
   `);
 
+  // Safe migrations — add new columns if they don't exist yet
+  const addColIfMissing = (col, def) => {
+    try { db.run(`ALTER TABLE tickets ADD COLUMN ${col} ${def}`); } catch (_) { /* already exists */ }
+  };
+  addColIfMissing('business_impact', 'TEXT');
+  addColIfMissing('next_step', 'TEXT');
+
   seedInitialData(db);
   console.log('[DB] Database initialized successfully.');
 }

@@ -104,7 +104,10 @@ router.post('/',
         if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
         const { project_id, sprint_id, parent_id, title, description, status, priority,
-            type, story_points, assignee_initials, labels, due_date } = req.body;
+            type, story_points, assignee_initials, assignee_name, labels, due_date,
+            business_impact, next_step } = req.body;
+        // Support free-text assignee_name from the simplified form
+        const resolvedAssignee = assignee_initials || assignee_name || null;
         const db = getDb();
 
         const project = db.get('SELECT * FROM projects WHERE id = ?', [project_id]);
@@ -116,11 +119,12 @@ router.post('/',
         const resolvedStatus = status || 'backlog';
         db.run(
             `INSERT INTO tickets (id, project_id, sprint_id, parent_id, title, description, status, priority,
-                            type, story_points, assignee_initials, reporter_initials, labels, due_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                            type, story_points, assignee_initials, reporter_initials, labels, due_date, business_impact, next_step)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [ticketId, project_id, sprint_id || null, parent_id || null, title, description || '',
                 resolvedStatus, priority || 'medium', type || 'task', story_points || null,
-                assignee_initials || null, req.user.initials, labels || '', due_date || null]
+                resolvedAssignee, req.user.initials, labels || '', due_date || null,
+                business_impact || null, next_step || null]
         );
 
         logAudit(db, ticketId, req.user.initials, 'created', null, null, null,
@@ -148,6 +152,8 @@ router.put('/:id', (req, res) => {
         is_escalated: { label: 'Escalation changed', action: null },
         title: { label: 'Title changed', action: 'title_changed' },
         description: { label: 'Description changed', action: 'description_changed' },
+        business_impact: { label: 'Business impact changed', action: 'business_impact_changed' },
+        next_step: { label: 'Next step changed', action: 'next_step_changed' },
     };
 
     const fields = Object.keys(tracked);
