@@ -14,7 +14,58 @@ function logAudit(db, ticket_id, changed_by, action, field_name, old_value, new_
     );
 }
 
-// GET /api/tickets
+// ─── SPECIFIC STATICS ─────────────────────────────────────────────────────────
+
+// GET /api/tickets/notifications — all watched incidents for current user
+router.get('/notifications', (req, res) => {
+    const db = getDb();
+    const rows = db.all(`
+        SELECT t.id, t.title, t.status, t.priority, t.is_escalated,
+               (SELECT note FROM ticket_audit_log
+                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_note,
+               (SELECT timestamp FROM ticket_audit_log
+                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_at
+        FROM tickets t
+        JOIN ticket_watchers tw ON tw.ticket_id = t.id
+        WHERE tw.user_initials = ?
+        ORDER BY latest_at DESC
+    `, [req.user.initials]);
+    res.json(rows);
+});
+
+// ─── SPECIFIC SUB-RESOURCE UPDATES (FIXES ROUTING BLOAT) ─────────────────────
+
+// Update specific audit log entry (timestamp/notes)
+router.put('/audit/:logId', (req, res) => {
+    const db = getDb();
+    const { timestamp, note } = req.body;
+    const updates = [];
+    const params = [];
+    if (timestamp !== undefined) { updates.push('timestamp = ?'); params.push(timestamp); }
+    if (note !== undefined) { updates.push('note = ?'); params.push(note); }
+    if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(req.params.logId);
+    db.run(`UPDATE ticket_audit_log SET ${updates.join(', ')} WHERE id = ?`, params);
+    res.json({ message: 'Audit log entry updated.' });
+});
+
+// Update specific comment (content/timestamp)
+router.put('/comments/:commentId', (req, res) => {
+    const db = getDb();
+    const { content, created_at } = req.body;
+    const updates = [];
+    const params = [];
+    if (content !== undefined) { updates.push('content = ?'); params.push(content); }
+    if (created_at !== undefined) { updates.push('created_at = ?'); params.push(created_at); }
+    if (updates.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(req.params.commentId);
+    db.run(`UPDATE comments SET ${updates.join(', ')} WHERE id = ?`, params);
+    res.json({ message: 'Comment updated.' });
+});
+
+// ─── COLLECTION ROUTES ────────────────────────────────────────────────────────
+
+// GET /api/tickets - List tickets
 router.get('/', (req, res) => {
     const { project_id, sprint_id, status, assignee } = req.query;
     const db = getDb();
@@ -46,24 +97,51 @@ router.get('/', (req, res) => {
     res.json(params.length ? db.all(query, params) : db.all(query));
 });
 
-// GET /api/tickets/notifications — all watched incidents for current user
-router.get('/notifications', (req, res) => {
-    const db = getDb();
-    const rows = db.all(`
-        SELECT t.id, t.title, t.status, t.priority, t.is_escalated,
-               (SELECT note FROM ticket_audit_log
-                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_note,
-               (SELECT timestamp FROM ticket_audit_log
-                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_at
-        FROM tickets t
-        JOIN ticket_watchers tw ON tw.ticket_id = t.id
-        WHERE tw.user_initials = ?
-        ORDER BY latest_at DESC
-    `, [req.user.initials]);
-    res.json(rows);
-});
+// POST /api/tickets - Create ticket
+router.post('/',
+    [
+        body('title').trim().notEmpty().withMessage('Title is required'),
+        body('project_id').notEmpty(),
+    ],
+    (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-// GET /api/tickets/:id
+        const { project_id, sprint_id, parent_id, title, description, status, priority,
+            type, story_points, assignee_initials, assignee_name, labels, due_date,
+            business_impact, next_step } = req.body;
+        
+        const resolvedAssignee = assignee_initials || assignee_name || null;
+        const db = getDb();
+
+        const project = db.get('SELECT * FROM projects WHERE id = ?', [project_id]);
+        if (!project) return res.status(404).json({ error: 'Project not found.' });
+
+        const ticketId = `${project.key}-${project.ticket_counter}`;
+        db.run('UPDATE projects SET ticket_counter = ticket_counter + 1 WHERE id = ?', [project_id]);
+
+        const resolvedStatus = status || 'backlog';
+        db.run(
+            `INSERT INTO tickets (id, project_id, sprint_id, parent_id, title, description, status, priority,
+                            type, story_points, assignee_initials, reporter_initials, labels, due_date, business_impact, next_step)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [ticketId, project_id, sprint_id || null, parent_id || null, title, description || '',
+                resolvedStatus, priority || 'medium', type || 'task', story_points || null,
+                resolvedAssignee, req.user.initials, labels || '', due_date || null,
+                business_impact || null, next_step || null]
+        );
+
+        logAudit(db, ticketId, req.user.initials, 'created', null, null, null,
+            `Ticket created — Status: ${resolvedStatus}, Priority: ${priority || 'medium'}, Type: ${type || 'task'}`);
+
+        const ticket = db.get('SELECT * FROM tickets WHERE id = ?', [ticketId]);
+        res.status(201).json(ticket);
+    }
+);
+
+// ─── ITEM GENERIC ROUTES ──────────────────────────────────────────────────────
+
+// GET /api/tickets/:id - Get detail
 router.get('/:id', (req, res) => {
     const db = getDb();
     const ticket = db.get(`
@@ -93,49 +171,7 @@ router.get('/:id', (req, res) => {
     res.json(ticket);
 });
 
-// POST /api/tickets
-router.post('/',
-    [
-        body('title').trim().notEmpty().withMessage('Title is required'),
-        body('project_id').notEmpty(),
-    ],
-    (req, res) => {
-        const errors = validationResult(req);
-        if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
-
-        const { project_id, sprint_id, parent_id, title, description, status, priority,
-            type, story_points, assignee_initials, assignee_name, labels, due_date,
-            business_impact, next_step } = req.body;
-        // Support free-text assignee_name from the simplified form
-        const resolvedAssignee = assignee_initials || assignee_name || null;
-        const db = getDb();
-
-        const project = db.get('SELECT * FROM projects WHERE id = ?', [project_id]);
-        if (!project) return res.status(404).json({ error: 'Project not found.' });
-
-        const ticketId = `${project.key}-${project.ticket_counter}`;
-        db.run('UPDATE projects SET ticket_counter = ticket_counter + 1 WHERE id = ?', [project_id]);
-
-        const resolvedStatus = status || 'backlog';
-        db.run(
-            `INSERT INTO tickets (id, project_id, sprint_id, parent_id, title, description, status, priority,
-                            type, story_points, assignee_initials, reporter_initials, labels, due_date, business_impact, next_step)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [ticketId, project_id, sprint_id || null, parent_id || null, title, description || '',
-                resolvedStatus, priority || 'medium', type || 'task', story_points || null,
-                resolvedAssignee, req.user.initials, labels || '', due_date || null,
-                business_impact || null, next_step || null]
-        );
-
-        logAudit(db, ticketId, req.user.initials, 'created', null, null, null,
-            `Ticket created — Status: ${resolvedStatus}, Priority: ${priority || 'medium'}, Type: ${type || 'task'}`);
-
-        const ticket = db.get('SELECT * FROM tickets WHERE id = ?', [ticketId]);
-        res.status(201).json(ticket);
-    }
-);
-
-// PUT /api/tickets/:id
+// PUT /api/tickets/:id - Update ticket
 router.put('/:id', (req, res) => {
     const db = getDb();
     const ticket = db.get('SELECT * FROM tickets WHERE id = ?', [req.params.id]);
@@ -154,6 +190,8 @@ router.put('/:id', (req, res) => {
         description: { label: 'Description changed', action: 'description_changed' },
         business_impact: { label: 'Business impact changed', action: 'business_impact_changed' },
         next_step: { label: 'Next step changed', action: 'next_step_changed' },
+        created_at: { label: 'Creation date overridden', action: 'timestamp_modified' },
+        updated_at: { label: 'Update date overridden', action: 'timestamp_modified' },
     };
 
     const fields = Object.keys(tracked);
@@ -181,13 +219,19 @@ router.put('/:id', (req, res) => {
 
     const setClauses = Object.keys(updates).map(f => `${f} = ?`).join(', ');
     const values = [...Object.values(updates), ticket.id];
-    db.run(`UPDATE tickets SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, values);
+    
+    // Auto-update updated_at unless explicitly overridden
+    if (updates.updated_at) {
+        db.run(`UPDATE tickets SET ${setClauses} WHERE id = ?`, values);
+    } else {
+        db.run(`UPDATE tickets SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, values);
+    }
 
     const updated = db.get('SELECT * FROM tickets WHERE id = ?', [ticket.id]);
     res.json(updated);
 });
 
-// DELETE /api/tickets/:id
+// DELETE /api/tickets/:id - Delete ticket
 router.delete('/:id', (req, res) => {
     const db = getDb();
     const ticket = db.get('SELECT * FROM tickets WHERE id = ?', [req.params.id]);
@@ -198,8 +242,9 @@ router.delete('/:id', (req, res) => {
     res.json({ message: 'Ticket deleted.' });
 });
 
-// ─── AUDIT LOG ────────────────────────────────────────────────────────────────
+// ─── NESTED RESOURCE ROUTES ──────────────────────────────────────────────────
 
+// GET /api/tickets/:id/audit - Audit logs
 router.get('/:id/audit', (req, res) => {
     const db = getDb();
     const logs = db.all(`
@@ -212,8 +257,7 @@ router.get('/:id/audit', (req, res) => {
     res.json(logs);
 });
 
-// ─── COMMENTS ─────────────────────────────────────────────────────────────────
-
+// GET /api/tickets/:id/comments - List comments
 router.get('/:id/comments', (req, res) => {
     const db = getDb();
     const comments = db.all(`
@@ -226,6 +270,7 @@ router.get('/:id/comments', (req, res) => {
     res.json(comments);
 });
 
+// POST /api/tickets/:id/comments - Add comment
 router.post('/:id/comments',
     [body('content').trim().notEmpty()],
     (req, res) => {
@@ -257,8 +302,7 @@ router.post('/:id/comments',
     }
 );
 
-// ─── SUBTASKS ─────────────────────────────────────────────────────────────────
-
+// GET /api/tickets/:id/subtasks - List subtasks
 router.get('/:id/subtasks', (req, res) => {
     const db = getDb();
     const subtasks = db.all(`
@@ -271,6 +315,7 @@ router.get('/:id/subtasks', (req, res) => {
     res.json(subtasks);
 });
 
+// POST /api/tickets/:id/subtasks - Create subtask
 router.post('/:id/subtasks',
     [body('title').trim().notEmpty()],
     (req, res) => {
@@ -297,8 +342,7 @@ router.post('/:id/subtasks',
     }
 );
 
-// ─── WATCHERS ─────────────────────────────────────────────────────────────────
-
+// POST /api/tickets/:id/watch - Watch ticket
 router.post('/:id/watch', (req, res) => {
     const db = getDb();
     try {
@@ -311,6 +355,7 @@ router.post('/:id/watch', (req, res) => {
     }
 });
 
+// DELETE /api/tickets/:id/watch - Unwatch ticket
 router.delete('/:id/watch', (req, res) => {
     const db = getDb();
     db.run('DELETE FROM ticket_watchers WHERE ticket_id = ? AND user_initials = ?', [req.params.id, req.user.initials]);
@@ -319,24 +364,47 @@ router.delete('/:id/watch', (req, res) => {
     res.json({ message: 'Unwatched ticket.' });
 });
 
-// ─── NOTIFICATIONS ─────────────────────────────────────────────────────────────
-
-// GET /api/tickets/notifications — all watched incidents for current user
-router.get('/notifications', (req, res) => {
+// PUT /api/tickets/comments/:commentId - Update a comment
+router.put('/comments/:commentId', (req, res) => {
     const db = getDb();
-    const rows = db.all(`
-        SELECT t.id, t.title, t.status, t.priority, t.is_escalated,
-               (SELECT note FROM ticket_audit_log
-                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_note,
-               (SELECT timestamp FROM ticket_audit_log
-                WHERE ticket_id = t.id ORDER BY id DESC LIMIT 1) AS latest_at
-        FROM tickets t
-        JOIN ticket_watchers tw ON tw.ticket_id = t.id
-        WHERE tw.user_initials = ?
-        ORDER BY latest_at DESC
-    `, [req.user.initials]);
-    res.json(rows);
+    const { content, created_at } = req.body;
+    
+    const comment = db.get('SELECT * FROM comments WHERE id = ?', [req.params.commentId]);
+    if (!comment) return res.status(404).json({ error: 'Comment not found.' });
+
+    const updates = [];
+    const params = [];
+    if (content !== undefined) { updates.push('content = ?'); params.push(content); }
+    if (created_at !== undefined) { updates.push('created_at = ?'); params.push(created_at); }
+
+    if (updates.length > 0) {
+        params.push(req.params.commentId);
+        db.run(`UPDATE comments SET ${updates.join(', ')} WHERE id = ?`, params);
+        db.run('UPDATE tickets SET updated_at = CURRENT_TIMESTAMP WHERE id = ?', [comment.ticket_id]);
+    }
+
+    res.json({ message: 'Comment updated.' });
+});
+
+// PUT /api/tickets/audit/:logId - Update audit log entry
+router.put('/audit/:logId', (req, res) => {
+    const db = getDb();
+    const { note, timestamp } = req.body;
+
+    const log = db.get('SELECT * FROM ticket_audit_log WHERE id = ?', [req.params.logId]);
+    if (!log) return res.status(404).json({ error: 'Audit log entry not found.' });
+
+    const updates = [];
+    const params = [];
+    if (note !== undefined) { updates.push('note = ?'); params.push(note); }
+    if (timestamp !== undefined) { updates.push('timestamp = ?'); params.push(timestamp); }
+
+    if (updates.length > 0) {
+        params.push(req.params.logId);
+        db.run(`UPDATE ticket_audit_log SET ${updates.join(', ')} WHERE id = ?`, params);
+    }
+
+    res.json({ message: 'Audit log entry updated.' });
 });
 
 module.exports = router;
-

@@ -13,15 +13,29 @@ async function api(path, options = {}) {
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`, ...(options.headers || {}) }
   });
   if (res.status === 401) { sessionStorage.clear(); window.location.href = '/login.html'; return; }
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || 'Request failed');
-  return data;
+  
+  const contentType = res.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Request failed');
+    return data;
+  } else {
+    // If not JSON, it's likely an HTML error page or raw text
+    const text = await res.text();
+    if (!res.ok) {
+      // Try to extract a meaningful snippet from HTML if possible
+      const snippet = text.length > 100 ? text.slice(0, 100) + '...' : text;
+      throw new Error(`Server error (${res.status} ${res.statusText}): ${snippet}`);
+    }
+    return text;
+  }
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let projects = [], currentProjectId = null, allUsers = [];
 let currentSprints = [], currentActiveSprint = null;
-let boardTickets = [], currentPanelTicketId = null;
+let boardTickets = [], currentPanelTicketId = null, isEditingSidePanel = false;
+
 let currentView = 'board'; // 'board' | 'list'
 let listSortField = 'id', listSortAsc = true;
 let activeFilterLabel = null;
@@ -375,8 +389,12 @@ function injectSidePanelHTML() {
           <h2 id="spTitle" class="incident-title"></h2>
         </div>
         <div class="incident-modal-header-actions">
+          <button id="spEditBtn" class="btn btn-small btn-outline"><i class="fas fa-edit"></i> Edit</button>
+          <button id="spSaveBtn" class="btn btn-small btn-primary" style="display:none"><i class="fas fa-save"></i> Save</button>
+          <button id="spCancelBtn" class="btn btn-small btn-outline" style="display:none"><i class="fas fa-times"></i> Cancel</button>
           <button id="spCloseBtn" class="btn btn-small btn-outline"><i class="fas fa-times"></i> Close</button>
         </div>
+
       </div>
       <div class="incident-modal-body">
         <div class="incident-modal-left">
@@ -445,7 +463,11 @@ function injectSidePanelHTML() {
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if (e.target === modal) closeSidePanel(); });
   document.getElementById('spCloseBtn').addEventListener('click', closeSidePanel);
+  document.getElementById('spEditBtn').addEventListener('click', toggleEditMode);
+  document.getElementById('spSaveBtn').addEventListener('click', saveTicketEdits);
+  document.getElementById('spCancelBtn').addEventListener('click', () => { isEditingSidePanel = false; refreshSidePanel(currentPanelTicketId); });
   document.getElementById('spWatchBtn').addEventListener('click', toggleWatch);
+
   document.getElementById('spAddCommentBtn').addEventListener('click', addComment);
   document.getElementById('spAddSubtaskBtn').addEventListener('click', addSubtask);
 }
@@ -468,15 +490,32 @@ async function refreshSidePanel(id) {
 }
 
 function renderSidePanel(ticket, comments, auditLog, subtasks) {
+  const editBtn = document.getElementById('spEditBtn');
+  const saveBtn = document.getElementById('spSaveBtn');
+  const cancelBtn = document.getElementById('spCancelBtn');
+
+  if (editBtn) editBtn.style.display = isEditingSidePanel ? 'none' : 'inline-block';
+  if (saveBtn) saveBtn.style.display = isEditingSidePanel ? 'inline-block' : 'none';
+  if (cancelBtn) cancelBtn.style.display = isEditingSidePanel ? 'inline-block' : 'none';
+
   document.getElementById('spTicketId').textContent = ticket.id;
-  document.getElementById('spTitle').textContent = ticket.title;
-  document.getElementById('spDescription').innerHTML = ticket.description || '<span style="color:#5e6c84;font-size:13px">No description</span>';
-  document.getElementById('spBusinessImpact').innerHTML = ticket.business_impact
-    ? escHtml(ticket.business_impact).replace(/\n/g, '<br>')
-    : '<span style="color:#5e6c84;font-size:13px">—</span>';
-  document.getElementById('spNextStep').innerHTML = ticket.next_step
-    ? escHtml(ticket.next_step).replace(/\n/g, '<br>')
-    : '<span style="color:#5e6c84;font-size:13px">—</span>';
+  
+  if (isEditingSidePanel) {
+    document.getElementById('spTitle').innerHTML = `<input type="text" id="spTitleInput" class="sp-input" value="${escHtml(ticket.title)}">`;
+    document.getElementById('spDescription').innerHTML = `<textarea id="spDescriptionInput" class="sp-textarea">${escHtml(ticket.description || '')}</textarea>`;
+    document.getElementById('spBusinessImpact').innerHTML = `<textarea id="spBusinessImpactInput" class="sp-textarea">${escHtml(ticket.business_impact || '')}</textarea>`;
+    document.getElementById('spNextStep').innerHTML = `<textarea id="spNextStepInput" class="sp-textarea">${escHtml(ticket.next_step || '')}</textarea>`;
+  } else {
+    document.getElementById('spTitle').textContent = ticket.title;
+    document.getElementById('spDescription').innerHTML = ticket.description || '<span style="color:#5e6c84;font-size:13px">No description</span>';
+    document.getElementById('spBusinessImpact').innerHTML = ticket.business_impact
+      ? escHtml(ticket.business_impact).replace(/\n/g, '<br>')
+      : '<span style="color:#5e6c84;font-size:13px">—</span>';
+    document.getElementById('spNextStep').innerHTML = ticket.next_step
+      ? escHtml(ticket.next_step).replace(/\n/g, '<br>')
+      : '<span style="color:#5e6c84;font-size:13px">—</span>';
+  }
+
   document.getElementById('spAssignee').textContent = ticket.assignee_name || ticket.assignee_initials || 'Unassigned';
   document.getElementById('spReporter').textContent = ticket.reporter_name || ticket.reporter_initials || '—';
 
@@ -495,8 +534,14 @@ function renderSidePanel(ticket, comments, auditLog, subtasks) {
   // Timestamps
   const created = document.getElementById('spCreatedAt');
   const updated = document.getElementById('spUpdatedAt');
-  if (created) created.textContent = ticket.created_at ? `Created: ${fmtDate(ticket.created_at)}` : '';
-  if (updated) updated.textContent = ticket.updated_at ? `Updated: ${fmtDate(ticket.updated_at)}` : '';
+  if (isEditingSidePanel) {
+    created.innerHTML = `<label style="font-size:10px;display:block">Created</label><input type="datetime-local" id="spCreatedAtInput" class="sp-input" style="font-size:11px;padding:4px" value="${sqliteToLocalISO(ticket.created_at)}">`;
+    updated.innerHTML = `<label style="font-size:10px;display:block;margin-top:5px">Updated</label><input type="datetime-local" id="spUpdatedAtInput" class="sp-input" style="font-size:11px;padding:4px" value="${sqliteToLocalISO(ticket.updated_at)}">`;
+  } else {
+    if (created) created.textContent = ticket.created_at ? `Created: ${fmtDate(ticket.created_at)}` : '';
+    if (updated) updated.textContent = ticket.updated_at ? `Updated: ${fmtDate(ticket.updated_at)}` : '';
+  }
+
 
   const isWatching = ticket.watchers?.some(w => w.user_initials === currentUser.initials);
   const wb = document.getElementById('spWatchBtn'); wb.textContent = isWatching ? '★ Watching' : '☆ Watch'; wb.dataset.watching = isWatching;
@@ -510,12 +555,49 @@ function renderSidePanel(ticket, comments, auditLog, subtasks) {
     cb.addEventListener('change', () => updateSubtaskStatus(cb.dataset.id, cb.checked)));
 
   document.getElementById('spComments').innerHTML = comments.length
-    ? comments.map(c => `<div class="sp-comment"><div class="sp-comment-meta"><span class="sp-avatar-mini small">${c.author_initials}</span><strong>${escHtml(c.author_name || c.author_initials)}</strong><span class="sp-timestamp">${fmtDate(c.created_at)}</span></div><div class="sp-comment-body">${escHtml(c.content)}</div></div>`).join('')
+    ? comments.map(c => `
+      <div class="sp-comment">
+        <div class="sp-comment-meta">
+          <span class="sp-avatar-mini small">${c.author_initials}</span>
+          <strong>${escHtml(c.author_name || c.author_initials)}</strong>
+          <span id="commentTime-${c.id}" class="sp-timestamp">${fmtDate(c.created_at)}</span>
+          <button class="btn-icon" style="margin-left:auto" onclick="toggleCommentEdit(${c.id})" title="Edit comment"><i class="fas fa-pencil-alt"></i></button>
+        </div>
+        <div id="commentBody-${c.id}" class="sp-comment-body" onclick="toggleCommentEdit(${c.id})" style="cursor:pointer" title="Click to edit">${escHtml(c.content)}</div>
+        <div id="commentEditArea-${c.id}" style="display:none;margin-top:10px">
+          <textarea id="commentEdit-${c.id}" class="sp-textarea" style="min-height:50px">${escHtml(c.content)}</textarea>
+          <div style="display:flex;gap:8px;margin-top:5px;align-items:center">
+            <input type="datetime-local" id="commentDate-${c.id}" class="sp-input" style="font-size:11px;padding:4px;width:auto" value="${sqliteToLocalISO(c.created_at)}">
+            <button class="btn btn-small btn-primary" onclick="updateComment(${c.id})">Save</button>
+            <button class="btn btn-small btn-outline" onclick="refreshSidePanel(currentPanelTicketId)">Cancel</button>
+          </div>
+        </div>
+      </div>`).join('')
     : '<p style="color:#5e6c84;font-size:13px">No comments yet</p>';
 
+
   document.getElementById('spAuditLog').innerHTML = auditLog.length
-    ? auditLog.map(e => `<div class="audit-entry"><div class="audit-timestamp">${fmtDate(e.timestamp)}</div><div class="audit-body"><span class="sp-avatar-mini small">${e.changed_by}</span><span class="audit-note">${escHtml(e.note || e.action)}</span></div></div>`).join('')
+    ? auditLog.map(e => `
+      <div class="audit-entry">
+        <div class="audit-header" style="display:flex;justify-content:space-between">
+          <div class="audit-timestamp">${fmtDate(e.timestamp)}</div>
+          <button class="btn-icon" onclick="toggleAuditEdit(${e.id})" title="Edit log entry"><i class="fas fa-pencil-alt"></i></button>
+        </div>
+        <div class="audit-body">
+          <span class="sp-avatar-mini small">${e.changed_by}</span>
+          <span id="auditNote-${e.id}" class="audit-note" onclick="toggleAuditEdit(${e.id})" style="cursor:pointer" title="Click to edit">${escHtml(e.note || e.action)}</span>
+        </div>
+        <div id="auditEditArea-${e.id}" style="display:none;margin-top:8px">
+          <input type="text" id="auditEdit-${e.id}" class="sp-input" value="${escHtml(e.note || e.action)}">
+          <div style="display:flex;gap:8px;margin-top:5px;align-items:center">
+            <input type="datetime-local" id="auditDate-${e.id}" class="sp-input" style="font-size:11px;padding:4px;width:auto" value="${sqliteToLocalISO(e.timestamp)}">
+            <button class="btn btn-small btn-primary" onclick="updateAuditLog(${e.id})">Save</button>
+            <button class="btn btn-small btn-outline" onclick="refreshSidePanel(currentPanelTicketId)">Cancel</button>
+          </div>
+        </div>
+      </div>`).join('')
     : '<p style="color:#5e6c84;font-size:13px">No activity yet</p>';
+
 }
 
 function closeSidePanel() {
@@ -598,6 +680,106 @@ async function updateSubtaskStatus(id, done) {
   try { await api(`/tickets/${id}`, { method: 'PUT', body: JSON.stringify({ status: done ? 'done' : 'todo' }) }); }
   catch (err) { showNotification(err.message, 'error'); }
 }
+
+function toggleEditMode() {
+  isEditingSidePanel = !isEditingSidePanel;
+  refreshSidePanel(currentPanelTicketId);
+}
+
+async function saveTicketEdits() {
+  if (!currentPanelTicketId) return;
+  const title = document.getElementById('spTitleInput')?.value;
+  const description = document.getElementById('spDescriptionInput')?.value;
+  const businessImpact = document.getElementById('spBusinessImpactInput')?.value;
+  const nextStep = document.getElementById('spNextStepInput')?.value;
+  const createdAt = localISOToSqlite(document.getElementById('spCreatedAtInput')?.value);
+  const updatedAt = localISOToSqlite(document.getElementById('spUpdatedAtInput')?.value);
+
+  const body = {};
+  if (title !== undefined) body.title = title;
+  if (description !== undefined) body.description = description;
+  if (businessImpact !== undefined) body.business_impact = businessImpact;
+  if (nextStep !== undefined) body.next_step = nextStep;
+  if (createdAt) body.created_at = createdAt;
+  if (updatedAt) body.updated_at = updatedAt;
+
+  try {
+    await api(`/tickets/${currentPanelTicketId}`, { method: 'PUT', body: JSON.stringify(body) });
+    showNotification('Ticket updated successfully.');
+    isEditingSidePanel = false;
+    await loadBoard();
+    await refreshSidePanel(currentPanelTicketId);
+  } catch (err) {
+    showNotification('Update failed: ' + err.message, 'error');
+  }
+}
+
+function sqliteToLocalISO(sqlite) {
+  if (!sqlite) return '';
+  try {
+    // Current database stores UTC: "YYYY-MM-DD HH:MM:SS"
+    const utc = sqlite.includes('T') ? sqlite : sqlite.replace(' ', 'T') + 'Z';
+    const d = new Date(utc);
+    if (isNaN(d.getTime())) return '';
+    
+    // Extract local components for datetime-local input (YYYY-MM-DDTHH:MM)
+    const Y = d.getFullYear();
+    const M = String(d.getMonth() + 1).padStart(2, '0');
+    const D = String(d.getDate()).padStart(2, '0');
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${Y}-${M}-${D}T${h}:${m}`;
+  } catch { return ''; }
+}
+
+function localISOToSqlite(local) {
+  if (!local) return null;
+  try {
+    // 'local' is "YYYY-MM-DDTHH:MM" from browser input
+    const d = new Date(local);
+    if (isNaN(d.getTime())) return null;
+    // Store as UTC in SQLite format: "YYYY-MM-DD HH:MM:SS"
+    return d.toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+  } catch { return null; }
+}
+
+async function updateComment(commentId) {
+  const content = document.getElementById(`commentEdit-${commentId}`).value;
+  const createdAt = localISOToSqlite(document.getElementById(`commentDate-${commentId}`).value);
+  try {
+    await api(`/tickets/comments/${commentId}`, { method: 'PUT', body: JSON.stringify({ content, created_at: createdAt }) });
+    showNotification('Comment updated.');
+    refreshSidePanel(currentPanelTicketId);
+  } catch (err) { showNotification(err.message, 'error'); }
+}
+
+async function updateAuditLog(logId) {
+  const note = document.getElementById(`auditEdit-${logId}`).value;
+  const timestamp = localISOToSqlite(document.getElementById(`auditDate-${logId}`).value);
+  try {
+    await api(`/tickets/audit/${logId}`, { method: 'PUT', body: JSON.stringify({ note, timestamp }) });
+    showNotification('Activity log entry updated.');
+    refreshSidePanel(currentPanelTicketId);
+  } catch (err) { showNotification(err.message, 'error'); }
+}
+
+function toggleCommentEdit(id) {
+  const area = document.getElementById(`commentEditArea-${id}`);
+  const body = document.getElementById(`commentBody-${id}`);
+  const isHidden = area.style.display === 'none';
+  area.style.display = isHidden ? 'block' : 'none';
+  body.style.display = isHidden ? 'none' : 'block';
+}
+
+function toggleAuditEdit(id) {
+  const area = document.getElementById(`auditEditArea-${id}`);
+  const note = document.getElementById(`auditNote-${id}`);
+  const isHidden = area.style.display === 'none';
+  area.style.display = isHidden ? 'block' : 'none';
+  note.style.display = isHidden ? 'none' : 'block';
+}
+
+
 // ── Ticket Creation ────────────────────────────────────────────────────────────
 async function handleTicketFormSubmit(e) {
   e.preventDefault();
@@ -1004,13 +1186,20 @@ function showNotification(message, type = 'success') {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function escHtml(str) { const d = document.createElement('div'); d.textContent = str ?? ''; return d.innerHTML; }
+function escHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str ?? '';
+  return d.innerHTML.replace(/'/g, '&#39;');
+}
 function fmtDate(iso) {
   if (!iso) return '';
   try {
-    // SQLite CURRENT_TIMESTAMP = "YYYY-MM-DD HH:MM:SS" with no TZ indicator — treat as UTC
-    // so the browser converts to the device's local timezone automatically (e.g. PHT UTC+8)
-    const utc = iso.includes('T') ? iso : iso.replace(' ', 'T') + 'Z';
+    // SQLite format "YYYY-MM-DD HH:MM:SS" is naive UTC. 
+    // If it lacks 'T' or 'Z', treat it as UTC by appending 'Z'.
+    let utc = iso;
+    if (!iso.includes('Z') && !iso.includes('+')) {
+      utc = iso.includes('T') ? iso + 'Z' : iso.replace(' ', 'T') + 'Z';
+    }
     return new Date(utc).toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit'
@@ -1166,7 +1355,13 @@ function injectStyles() {
   .audit-body{display:flex;align-items:center;gap:8px;font-size:13px;}
   .sp-avatar-mini{width:28px;height:28px;border-radius:50%;background:#0052cc;color:white;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;}
   .sp-avatar-mini.small{width:22px;height:22px;font-size:10px;}
+  .btn-icon{background:none;border:none;color:#5e6c84;cursor:pointer;padding:4px;border-radius:4px;transition:all .2s;display:flex;align-items:center;justify-content:center;}
+  .btn-icon:hover{background:rgba(9,30,66,.08);color:#0052cc;}
+  .sp-comment .btn-icon,.audit-entry .btn-icon{opacity:0.4; transition: opacity 0.2s;}
+  .sp-comment:hover .btn-icon,.audit-entry:hover .btn-icon{opacity:1;}
+  .sp-comment-body:hover, .audit-note:hover { background: rgba(9,30,66,0.04); border-radius: 4px; }
   `;
+
   document.head.appendChild(s);
 }
 
