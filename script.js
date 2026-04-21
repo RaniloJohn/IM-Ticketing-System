@@ -389,7 +389,7 @@ function injectSidePanelHTML() {
           <h2 id="spTitle" class="incident-title"></h2>
         </div>
         <div class="incident-modal-header-actions">
-          <button id="spEditBtn" class="btn btn-small btn-outline"><i class="fas fa-edit"></i> Edit</button>
+          <button id="spEditBtn" class="btn btn-small btn-outline" style="display:none !important;"><i class="fas fa-edit"></i> Edit</button>
           <button id="spSaveBtn" class="btn btn-small btn-primary" style="display:none"><i class="fas fa-save"></i> Save</button>
           <button id="spCancelBtn" class="btn btn-small btn-outline" style="display:none"><i class="fas fa-times"></i> Cancel</button>
           <button id="spCloseBtn" class="btn btn-small btn-outline"><i class="fas fa-times"></i> Close</button>
@@ -494,7 +494,7 @@ function renderSidePanel(ticket, comments, auditLog, subtasks) {
   const saveBtn = document.getElementById('spSaveBtn');
   const cancelBtn = document.getElementById('spCancelBtn');
 
-  if (editBtn) editBtn.style.display = isEditingSidePanel ? 'none' : 'inline-block';
+  if (editBtn) editBtn.style.display = 'none'; // Hidden to disable editing
   if (saveBtn) saveBtn.style.display = isEditingSidePanel ? 'inline-block' : 'none';
   if (cancelBtn) cancelBtn.style.display = isEditingSidePanel ? 'inline-block' : 'none';
 
@@ -561,9 +561,9 @@ function renderSidePanel(ticket, comments, auditLog, subtasks) {
           <span class="sp-avatar-mini small">${c.author_initials}</span>
           <strong>${escHtml(c.author_name || c.author_initials)}</strong>
           <span id="commentTime-${c.id}" class="sp-timestamp">${fmtDate(c.created_at)}</span>
-          <button class="btn-icon" style="margin-left:auto" onclick="toggleCommentEdit(${c.id})" title="Edit comment"><i class="fas fa-pencil-alt"></i></button>
+          <!-- Edit comment button removed -->
         </div>
-        <div id="commentBody-${c.id}" class="sp-comment-body" onclick="toggleCommentEdit(${c.id})" style="cursor:pointer" title="Click to edit">${escHtml(c.content)}</div>
+        <div id="commentBody-${c.id}" class="sp-comment-body" style="cursor:default">${escHtml(c.content)}</div>
         <div id="commentEditArea-${c.id}" style="display:none;margin-top:10px">
           <textarea id="commentEdit-${c.id}" class="sp-textarea" style="min-height:50px">${escHtml(c.content)}</textarea>
           <div style="display:flex;gap:8px;margin-top:5px;align-items:center">
@@ -581,11 +581,11 @@ function renderSidePanel(ticket, comments, auditLog, subtasks) {
       <div class="audit-entry">
         <div class="audit-header" style="display:flex;justify-content:space-between">
           <div class="audit-timestamp">${fmtDate(e.timestamp)}</div>
-          <button class="btn-icon" onclick="toggleAuditEdit(${e.id})" title="Edit log entry"><i class="fas fa-pencil-alt"></i></button>
+          <!-- Edit log entry button removed -->
         </div>
         <div class="audit-body">
           <span class="sp-avatar-mini small">${e.changed_by}</span>
-          <span id="auditNote-${e.id}" class="audit-note" onclick="toggleAuditEdit(${e.id})" style="cursor:pointer" title="Click to edit">${escHtml(e.note || e.action)}</span>
+          <span id="auditNote-${e.id}" class="audit-note" style="cursor:default">${escHtml(e.note || e.action)}</span>
         </div>
         <div id="auditEditArea-${e.id}" style="display:none;margin-top:8px">
           <input type="text" id="auditEdit-${e.id}" class="sp-input" value="${escHtml(e.note || e.action)}">
